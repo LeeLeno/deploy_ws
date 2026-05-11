@@ -1,0 +1,27 @@
+# Third-party sources fetched by scripts/setup.sh — do not commit
+/unitree_mujoco/
+/unitree_rl_lab/
+/unitree_sdk2/
+/onnxruntime-linux-x64-*/
+/onnxruntime-linux-x64-*.tgz
+
+# Build artifacts
+build/
+dist/
+*.o
+*.a
+*.so
+*.so.*
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+.DS_Store
