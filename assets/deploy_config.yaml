@@ -1,4 +1,4 @@
-obs_dim: 160
+obs_dim: 154
 action_dim: 29
 ctrl_dt: 0.02
 action_scale: 2.0
@@ -30,14 +30,11 @@ tracked_body_names: [pelvis, left_hip_roll_link, left_knee_link, left_ankle_roll
 tracked_body_mujoco_ids: [1, 3, 5, 7, 9, 11, 13, 16, 18, 20, 23, 25, 27, 30]
 anchor_body_name: torso_link
 anchor_body_idx_in_tracked: 7
-training_noise_scales: {joint_angle: 0.01, joint_vel: 1.5, gyro: 0.2, linvel: 0.1}
-linvel_strategy: zero
+training_noise_scales: {joint_angle: 0.01, joint_vel: 0.5, gyro: 0.2, anchor_ori: 0.05, joint_pos_encoder_bias_per_episode: 0.01}
 obs_layout:
 - {name: command_joint_pos, dim: 29, source: motion_ref_frame.joint_pos}
 - {name: command_joint_vel, dim: 29, source: motion_ref_frame.joint_vel}
-- {name: motion_anchor_pos_b, dim: 3, source: 'subtract_frame(robot_torso, ref_torso).pos'}
 - {name: motion_anchor_ori_b, dim: 6, source: 'rotation_matrix(subtract_frame(...).quat)[:, :2].flatten()'}
-- {name: linvel, dim: 3, source: body_frame_linear_velocity (zero on G1)}
 - {name: gyro, dim: 3, source: imu.gyroscope}
 - {name: joint_pos_rel, dim: 29, source: dof_pos - default_angles}
 - {name: dof_vel, dim: 29, source: dof_vel}
