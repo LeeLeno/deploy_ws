@@ -1,0 +1,679 @@
+diff --git a/deploy/robots/g1_29dof/CMakeLists.txt b/deploy/robots/g1_29dof/CMakeLists.txt
+index 0e29419..c2cd6b7 100644
+--- a/deploy/robots/g1_29dof/CMakeLists.txt
++++ b/deploy/robots/g1_29dof/CMakeLists.txt
+@@ -13,6 +13,9 @@ include_directories(
+   include
+   ${PROJECT_SOURCE_DIR}/../../thirdparty/onnxruntime-linux-x64-1.22.0/include
+   ${PROJECT_SOURCE_DIR}/../../include/
++  # deploy_ws: pinned unitree_sdk2/include carries dds_wrapper/* (header-only,
++  # not present in older system-installed /usr/local/include/unitree).
++  ${PROJECT_SOURCE_DIR}/../../../../unitree_sdk2/include
+ )
+ 
+ link_libraries(
+diff --git a/deploy/robots/g1_29dof/config/config.yaml b/deploy/robots/g1_29dof/config/config.yaml
+index 8cc97fe..6fc8f3d 100644
+--- a/deploy/robots/g1_29dof/config/config.yaml
++++ b/deploy/robots/g1_29dof/config/config.yaml
+@@ -15,6 +15,11 @@ FSM:
+       id: 102
+       type: Mimic
+ 
++    # deploy_ws: parallel WBT chain — independent runtime from Mimic_*.
++    Mimic_WBT_Dance1:
++      id: 110
++      type: WBT
++
+   Passive:
+     transitions: 
+       FixStand: LT + up.on_pressed
+@@ -61,10 +66,11 @@ FSM:
+       ]
+     ]
+   Velocity:
+-    transitions: 
++    transitions:
+       Passive: LT + B.on_pressed
+       Mimic_Dance_102: LT(2s) + down.on_pressed
+       Mimic_Gangnam_Style: LT(2s) + left.on_pressed
++      Mimic_WBT_Dance1: LT(2s) + right.on_pressed
+ 
+     policy_dir: config/policy/velocity
+     # policy_dir: ../../../logs/rsl_rl/unitree_g1_29dof_velocity
+@@ -78,7 +84,7 @@ FSM:
+     time_start: 2.8
+     time_end: 24.0
+   Mimic_Gangnam_Style:
+-    transitions: 
++    transitions:
+       Passive: LT + B.on_pressed
+       Velocity: RB + X.on_pressed
+     fps: 60
+@@ -87,3 +93,16 @@ FSM:
+     time_start: 5.2
+     time_end: 25.5
+ 
++  # deploy_ws: parallel WBT chain.  Source of truth = deploy_ws/assets/* (paths
++  # resolve from this controller's project root: g1_29dof/).  Three files are
++  # consumed directly — swap them in assets/ to redeploy a new training run.
++  Mimic_WBT_Dance1:
++    transitions:
++      Passive: LT + B.on_pressed
++      FixStand: RB + X.on_pressed
++    deploy_config: ../../../../assets/deploy_config.yaml
++    policy:        ../../../../assets/policy.onnx
++    motion:        ../../../../assets/dance1.bin
++    time_start: 0.0
++    # time_end: null  # null/omitted = play full clip duration from header
++
+diff --git a/deploy/robots/g1_29dof/include/State_WBT.h b/deploy/robots/g1_29dof/include/State_WBT.h
+new file mode 100644
+index 0000000..c9330c0
+--- /dev/null
++++ b/deploy/robots/g1_29dof/include/State_WBT.h
+@@ -0,0 +1,120 @@
++// SPDX-FileCopyrightText: 2026 deploy_ws (parallel WBT chain — independent of
++//   upstream State_Mimic; do not delete in upstream sync).
++//
++// State_WBT — runs a UniLab WBT (whole-body tracking) policy alongside upstream
++// State_Mimic without sharing any runtime state.  The actor obs / action /
++// motion-clip schemas are NOT compatible with State_Mimic and must not be
++// crossed-wired.
++//
++// Source of truth for cfg: deploy_ws/assets/deploy_config.yaml + dance*.bin +
++// policy.onnx — those are produced by UniLab's scripts/deploy/export_*.py.
++// State_WBT reads them directly so swapping the three files in assets/ is
++// enough to redeploy a new training checkpoint.
++#pragma once
++
++#include "FSM/State_RLBase.h"   // pulls in FSMState transitively; matches State_Mimic.h pattern
++#include "isaaclab/envs/manager_based_rl_env.h"
++
++#include <array>
++#include <atomic>
++#include <memory>
++#include <string>
++#include <thread>
++#include <vector>
++
++#include <eigen3/Eigen/Dense>
++
++
++// Motion clip loader for the UniLab WBT binary format produced by
++// UniLab/scripts/deploy/export_motion_bin.py.
++//
++// Layout (little-endian, frames-major float32 data after 16-byte header):
++//   header (16B, four int32):  fps, num_frames, num_joints, num_bodies
++//   joint_pos      [F][J]
++//   joint_vel      [F][J]
++//   body_pos_w     [F][B][3]
++//   body_quat_w    [F][B][4]   wxyz (matches mujoco / unitree_articulation)
++//   body_lin_vel_w [F][B][3]
++//   body_ang_vel_w [F][B][3]
++//
++// State_WBT only consumes joint_{pos,vel} and body_quat_w[anchor]; the rest is
++// loaded for diagnostics and future fields (e.g. anchor_pos_b when re-enabled
++// in training) but is otherwise dormant.
++class WBTMotionLoader
++{
++public:
++    explicit WBTMotionLoader(const std::string& path, int anchor_idx_in_tracked = 7);
++
++    // Re-index the cursor for a playback time in seconds (clamped to [0, duration]).
++    void update(float time);
++
++    // Linear / spherical interpolation between adjacent frames at current cursor.
++    Eigen::VectorXf    joint_pos()   const;
++    Eigen::VectorXf    joint_vel()   const;
++    Eigen::Quaternionf anchor_quat() const;   // wxyz
++    Eigen::Vector3f    anchor_pos()  const;
++
++    int   fps()         const { return fps_; }
++    int   num_frames()  const { return num_frames_; }
++    int   num_joints()  const { return num_joints_; }
++    int   num_bodies()  const { return num_bodies_; }
++    float duration()    const { return duration_; }
++
++private:
++    int fps_         = 0;
++    int num_frames_  = 0;
++    int num_joints_  = 0;
++    int num_bodies_  = 0;
++    int anchor_idx_  = 0;
++
++    float dt_       = 0.0f;
++    float duration_ = 0.0f;
++
++    int   index_0_ = 0;
++    int   index_1_ = 0;
++    float blend_   = 0.0f;
++
++    // Per-frame caches in flat row-major layout, slice with mat::row(f) at access time.
++    Eigen::MatrixXf joint_pos_;  // (F, J)
++    Eigen::MatrixXf joint_vel_;  // (F, J)
++    // Anchor body slices — full 14-body arrays are loaded but only the anchor
++    // slice is exposed; State_WBT does not currently consume the others.
++    std::vector<Eigen::Vector3f>    anchor_pos_w_;   // (F)
++    std::vector<Eigen::Quaternionf> anchor_quat_w_;  // (F) wxyz
++};
++
++
++class State_WBT : public FSMState
++{
++public:
++    State_WBT(int state_mode, std::string state_string);
++
++    void enter() override;
++    void run()   override;
++    void exit()  override;
++
++    // Shared with the wbt_* observation registrars defined in State_WBT.cpp.
++    // Set in enter() (per-instance), nullptr otherwise — the registrar guards
++    // against null to remain safe when a different FSM is active.
++    static std::shared_ptr<WBTMotionLoader> motion;
++    // Yaw-only alignment between robot heading and ref-motion frame-0 heading,
++    // computed at FSM enter.  Keeps motion_anchor_ori_b residual ≈ I at t=0
++    // (matches UniLab's RSI assumption when the robot can't actually teleport).
++    static Eigen::Quaternionf init_quat;
++
++private:
++    // Build a YAML::Node in the upstream ManagerBasedRLEnv schema directly from
++    // the UniLab-format deploy_config.yaml.  Single source of truth = the file
++    // produced by scripts/deploy/export_deploy_config.py.
++    YAML::Node build_env_cfg(const YAML::Node& deploy_cfg) const;
++
++    std::unique_ptr<isaaclab::ManagerBasedRLEnv> env_;
++    std::shared_ptr<WBTMotionLoader>             motion_;
++    std::array<float, 2>                         time_range_{0.0f, 0.0f};
++    int                                          anchor_body_idx_in_tracked_ = 7;
++
++    std::thread       policy_thread_;
++    std::atomic<bool> policy_thread_running_{false};
++};
++
++REGISTER_FSM(State_WBT)
+diff --git a/deploy/robots/g1_29dof/main.cpp b/deploy/robots/g1_29dof/main.cpp
+index be40418..dc3a29f 100644
+--- a/deploy/robots/g1_29dof/main.cpp
++++ b/deploy/robots/g1_29dof/main.cpp
+@@ -3,6 +3,7 @@
+ #include "FSM/State_FixStand.h"
+ #include "FSM/State_RLBase.h"
+ #include "State_Mimic.h"
++#include "State_WBT.h"   // deploy_ws: parallel WBT chain (UniLab format)
+ 
+ std::unique_ptr<LowCmd_t> FSMState::lowcmd = nullptr;
+ std::shared_ptr<LowState_t> FSMState::lowstate = nullptr;
+diff --git a/deploy/robots/g1_29dof/src/State_WBT.cpp b/deploy/robots/g1_29dof/src/State_WBT.cpp
+new file mode 100644
+index 0000000..538db46
+--- /dev/null
++++ b/deploy/robots/g1_29dof/src/State_WBT.cpp
+@@ -0,0 +1,466 @@
++// SPDX-FileCopyrightText: 2026 deploy_ws (parallel WBT chain).
++#include "State_WBT.h"
++
++#include "unitree_articulation.h"
++#include "isaaclab/envs/mdp/observations/observations.h"
++#include "isaaclab/envs/mdp/actions/joint_actions.h"
++#include "isaaclab/envs/mdp/terminations.h"
++#include "isaaclab/utils/utils.h"
++
++#include <chrono>
++#include <cstdint>
++#include <cstring>
++#include <filesystem>
++#include <fstream>
++#include <stdexcept>
++
++
++// ---------------------------------------------------------------------------
++// WBTMotionLoader
++// ---------------------------------------------------------------------------
++
++WBTMotionLoader::WBTMotionLoader(const std::string& path, int anchor_idx_in_tracked)
++: anchor_idx_(anchor_idx_in_tracked)
++{
++    std::ifstream f(path, std::ios::binary);
++    if (!f.is_open()) {
++        throw std::runtime_error("WBTMotionLoader: cannot open " + path);
++    }
++
++    std::int32_t hdr[4];
++    f.read(reinterpret_cast<char*>(hdr), sizeof(hdr));
++    if (f.gcount() != sizeof(hdr)) {
++        throw std::runtime_error("WBTMotionLoader: short header in " + path);
++    }
++    fps_        = hdr[0];
++    num_frames_ = hdr[1];
++    num_joints_ = hdr[2];
++    num_bodies_ = hdr[3];
++
++    if (fps_ <= 0 || num_frames_ <= 0 || num_joints_ <= 0 || num_bodies_ <= 0) {
++        throw std::runtime_error("WBTMotionLoader: bad header in " + path);
++    }
++    if (anchor_idx_ < 0 || anchor_idx_ >= num_bodies_) {
++        throw std::runtime_error("WBTMotionLoader: anchor idx " + std::to_string(anchor_idx_)
++                                 + " out of range [0," + std::to_string(num_bodies_) + ")");
++    }
++
++    dt_       = 1.0f / static_cast<float>(fps_);
++    duration_ = num_frames_ * dt_;
++
++    auto read_block = [&](std::size_t count) {
++        std::vector<float> buf(count);
++        f.read(reinterpret_cast<char*>(buf.data()), count * sizeof(float));
++        if (f.gcount() != static_cast<std::streamsize>(count * sizeof(float))) {
++            throw std::runtime_error("WBTMotionLoader: short data block in " + path);
++        }
++        return buf;
++    };
++
++    // joint_pos / joint_vel: each is (F, J) row-major float32, matches Eigen RowMajor.
++    {
++        auto buf = read_block(static_cast<std::size_t>(num_frames_) * num_joints_);
++        joint_pos_ = Eigen::Map<
++            Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
++        >(buf.data(), num_frames_, num_joints_);
++    }
++    {
++        auto buf = read_block(static_cast<std::size_t>(num_frames_) * num_joints_);
++        joint_vel_ = Eigen::Map<
++            Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
++        >(buf.data(), num_frames_, num_joints_);
++    }
++
++    // body_pos_w: only the anchor slice is retained.
++    {
++        auto buf = read_block(static_cast<std::size_t>(num_frames_) * num_bodies_ * 3);
++        anchor_pos_w_.resize(num_frames_);
++        for (int frame = 0; frame < num_frames_; ++frame) {
++            const float* base = buf.data() + (frame * num_bodies_ + anchor_idx_) * 3;
++            anchor_pos_w_[frame] = Eigen::Vector3f(base[0], base[1], base[2]);
++        }
++    }
++    // body_quat_w wxyz: anchor slice; Eigen::Quaternionf ctor is (w, x, y, z).
++    {
++        auto buf = read_block(static_cast<std::size_t>(num_frames_) * num_bodies_ * 4);
++        anchor_quat_w_.resize(num_frames_);
++        for (int frame = 0; frame < num_frames_; ++frame) {
++            const float* base = buf.data() + (frame * num_bodies_ + anchor_idx_) * 4;
++            anchor_quat_w_[frame] = Eigen::Quaternionf(base[0], base[1], base[2], base[3]);
++            anchor_quat_w_[frame].normalize();
++        }
++    }
++    // body_lin_vel_w, body_ang_vel_w: read past to validate file length, then drop.
++    (void)read_block(static_cast<std::size_t>(num_frames_) * num_bodies_ * 3);
++    (void)read_block(static_cast<std::size_t>(num_frames_) * num_bodies_ * 3);
++
++    if (f.peek() != EOF) {
++        spdlog::warn("WBTMotionLoader: trailing bytes after expected payload in {}", path);
++    }
++
++    update(0.0f);
++}
++
++void WBTMotionLoader::update(float time)
++{
++    if (time < 0.0f)                time = 0.0f;
++    if (time > duration_)           time = duration_;
++    const float frame_f = time / dt_;
++    index_0_ = std::min(static_cast<int>(frame_f), num_frames_ - 1);
++    index_1_ = std::min(index_0_ + 1, num_frames_ - 1);
++    blend_   = std::clamp(frame_f - static_cast<float>(index_0_), 0.0f, 1.0f);
++}
++
++Eigen::VectorXf WBTMotionLoader::joint_pos() const
++{
++    return joint_pos_.row(index_0_) * (1.0f - blend_)
++         + joint_pos_.row(index_1_) * blend_;
++}
++
++Eigen::VectorXf WBTMotionLoader::joint_vel() const
++{
++    return joint_vel_.row(index_0_) * (1.0f - blend_)
++         + joint_vel_.row(index_1_) * blend_;
++}
++
++Eigen::Quaternionf WBTMotionLoader::anchor_quat() const
++{
++    return anchor_quat_w_[index_0_].slerp(blend_, anchor_quat_w_[index_1_]);
++}
++
++Eigen::Vector3f WBTMotionLoader::anchor_pos() const
++{
++    return anchor_pos_w_[index_0_] * (1.0f - blend_)
++         + anchor_pos_w_[index_1_] * blend_;
++}
++
++
++// ---------------------------------------------------------------------------
++// Free helpers — torso quat in world from IMU (pelvis) + waist joints.  Same
++// kinematic chain mjlab uses; correct for G1-29DOF whose URDF puts the
++// waist_yaw/roll/pitch joints on the Z/X/Y axes in that order.
++// ---------------------------------------------------------------------------
++
++static Eigen::Quaternionf torso_quat_w(isaaclab::ManagerBasedRLEnv* env)
++{
++    using G1Type = unitree::BaseArticulation<LowState_t::SharedPtr>;
++    auto* robot = dynamic_cast<G1Type*>(env->robot.get());
++
++    auto& motors = robot->lowstate->msg_.motor_state();
++    return env->robot->data.root_quat_w
++         * Eigen::AngleAxisf(motors[12].q(), Eigen::Vector3f::UnitZ())
++         * Eigen::AngleAxisf(motors[13].q(), Eigen::Vector3f::UnitX())
++         * Eigen::AngleAxisf(motors[14].q(), Eigen::Vector3f::UnitY());
++}
++
++
++// ---------------------------------------------------------------------------
++// State_WBT static state
++// ---------------------------------------------------------------------------
++
++std::shared_ptr<WBTMotionLoader> State_WBT::motion = nullptr;
++Eigen::Quaternionf               State_WBT::init_quat = Eigen::Quaternionf::Identity();
++
++
++// ---------------------------------------------------------------------------
++// Observation registrars.  Naming prefix `wbt_` avoids collision with upstream
++// State_Mimic registrations (motion_joint_pos, motion_command, motion_anchor_ori_b).
++// All three are nullptr-safe so coexistence with Mimic doesn't crash.
++// ---------------------------------------------------------------------------
++
++namespace isaaclab { namespace mdp {
++
++REGISTER_OBSERVATION(wbt_command_joint_pos)
++{
++    auto& loader = State_WBT::motion;
++    if (!loader) {
++        return std::vector<float>(29, 0.0f);
++    }
++    const auto v = loader->joint_pos();
++    return std::vector<float>(v.data(), v.data() + v.size());
++}
++
++REGISTER_OBSERVATION(wbt_command_joint_vel)
++{
++    auto& loader = State_WBT::motion;
++    if (!loader) {
++        return std::vector<float>(29, 0.0f);
++    }
++    const auto v = loader->joint_vel();
++    return std::vector<float>(v.data(), v.data() + v.size());
++}
++
++// 6-d motion anchor orientation = first 2 columns of
++//     R(real^-1 * init * ref)
++// where `real` is the deployed robot's torso quat in world, `ref` is the
++// reference motion's anchor (torso_link) quat in world, and `init` is a yaw-
++// only correction set at FSM enter so the residual ≈ I at t=0 (UniLab's RSI
++// assumption transposed to deploy time).
++//
++// This is the same matrix mjlab State_Mimic builds — its `.transpose()` trick
++// after multiplying `(init*ref).conjugate() * real` collapses algebraically to
++// `R(real^-1 * init * ref)`, which is also what UniLab training computes via
++// `np_subtract_frame_transforms(robot, ref)` followed by `R[:, :2].flatten()`.
++REGISTER_OBSERVATION(wbt_motion_anchor_ori_b)
++{
++    auto& loader = State_WBT::motion;
++    if (!loader) {
++        return std::vector<float>(6, 0.0f);
++    }
++    const Eigen::Quaternionf real_q = torso_quat_w(env);
++    const Eigen::Quaternionf ref_q  = loader->anchor_quat();
++
++    const Eigen::Quaternionf rel = real_q.conjugate() * State_WBT::init_quat * ref_q;
++    const Eigen::Matrix3f    R   = rel.toRotationMatrix();
++
++    std::vector<float> out(6);
++    out[0] = R(0, 0);  out[1] = R(0, 1);
++    out[2] = R(1, 0);  out[3] = R(1, 1);
++    out[4] = R(2, 0);  out[5] = R(2, 1);
++    return out;
++}
++
++}}  // namespace isaaclab::mdp
++
++
++// ---------------------------------------------------------------------------
++// State_WBT impl
++// ---------------------------------------------------------------------------
++
++static std::filesystem::path resolve_path(const std::string& s)
++{
++    std::filesystem::path p(s);
++    return p.is_absolute() ? p : (param::proj_dir / p);
++}
++
++YAML::Node State_WBT::build_env_cfg(const YAML::Node& deploy_cfg) const
++{
++    // Map UniLab-format deploy_config.yaml -> the schema ManagerBasedRLEnv parses.
++    // Term names below MUST match observation registrar keys (wbt_* for our new
++    // ones, plus framework defaults: base_ang_vel, joint_pos_rel, joint_vel_rel,
++    // last_action).  Order MUST match assets/deploy_config.yaml.obs_layout, since
++    // ObservationManager concatenates in YAML iteration order which is preserved
++    // by yaml-cpp's SequenceMap.
++    YAML::Node cfg;
++    cfg["step_dt"]           = deploy_cfg["ctrl_dt"];
++    cfg["joint_ids_map"]     = deploy_cfg["joint_ids_map"];
++    cfg["default_joint_pos"] = deploy_cfg["default_angles"];
++    cfg["stiffness"]         = deploy_cfg["kp"];
++    cfg["damping"]           = deploy_cfg["kd"];
++
++    // -- action: q_target = action * action_scale + default_angles, clipped to joint limits.
++    const auto default_angles = deploy_cfg["default_angles"].as<std::vector<float>>();
++    const auto joint_lower    = deploy_cfg["joint_lower"   ].as<std::vector<float>>();
++    const auto joint_upper    = deploy_cfg["joint_upper"   ].as<std::vector<float>>();
++    const float action_scale  = deploy_cfg["action_scale"  ].as<float>();
++
++    YAML::Node jpa;
++    jpa["joint_names"] = std::vector<std::string>{".*"};
++    jpa["scale"]       = std::vector<float>(default_angles.size(), action_scale);
++    jpa["offset"]      = default_angles;
++    YAML::Node clip(YAML::NodeType::Sequence);
++    for (std::size_t i = 0; i < default_angles.size(); ++i) {
++        YAML::Node pair(YAML::NodeType::Sequence);
++        pair.push_back(joint_lower[i]);
++        pair.push_back(joint_upper[i]);
++        clip.push_back(pair);
++    }
++    jpa["clip"]      = clip;
++    jpa["joint_ids"] = YAML::Node();   // null -> all joints
++    cfg["actions"]["JointPositionAction"] = jpa;
++
++    // -- observations: build in the exact order from assets/deploy_config.yaml.obs_layout.
++    // Translation table (UniLab segment name -> framework registrar name):
++    //   command_joint_pos     -> wbt_command_joint_pos
++    //   command_joint_vel     -> wbt_command_joint_vel
++    //   motion_anchor_ori_b   -> wbt_motion_anchor_ori_b
++    //   gyro                  -> base_ang_vel        (root_ang_vel_b reads IMU gyroscope directly)
++    //   joint_pos_rel         -> joint_pos_rel       (dof_pos - default_joint_pos)
++    //   dof_vel               -> joint_vel_rel       (returns raw joint_vel)
++    //   last_actions          -> last_action         (returns raw policy output of previous step)
++    // The dim cross-check is done at runtime by comparing the assembled obs
++    // length to ONNX input width (OrtRunner does that for us).
++    static const std::map<std::string, std::string> alias = {
++        {"command_joint_pos",   "wbt_command_joint_pos"},
++        {"command_joint_vel",   "wbt_command_joint_vel"},
++        {"motion_anchor_ori_b", "wbt_motion_anchor_ori_b"},
++        {"gyro",                "base_ang_vel"},
++        {"joint_pos_rel",       "joint_pos_rel"},
++        {"dof_vel",             "joint_vel_rel"},
++        {"last_actions",        "last_action"},
++    };
++
++    YAML::Node obs;
++    int obs_total = 0;
++    for (const auto& seg : deploy_cfg["obs_layout"]) {
++        const auto unilab_name = seg["name"].as<std::string>();
++        const auto dim         = seg["dim"].as<int>();
++        const auto it = alias.find(unilab_name);
++        if (it == alias.end()) {
++            throw std::runtime_error("State_WBT: no framework alias for obs segment '"
++                                     + unilab_name + "'");
++        }
++        YAML::Node term;
++        term["params"]         = YAML::Node(YAML::NodeType::Map);   // empty {}
++        term["clip"]           = YAML::Node();                       // null
++        term["scale"]          = std::vector<float>(dim, 1.0f);
++        term["history_length"] = 1;
++        obs[it->second]        = term;
++        obs_total             += dim;
++    }
++    cfg["observations"] = obs;
++
++    const int expected = deploy_cfg["obs_dim"].as<int>();
++    if (obs_total != expected) {
++        throw std::runtime_error("State_WBT: obs_layout sum (" + std::to_string(obs_total)
++                                 + ") != obs_dim (" + std::to_string(expected) + ")");
++    }
++    return cfg;
++}
++
++State_WBT::State_WBT(int state_mode, std::string state_string)
++: FSMState(state_mode, state_string)
++{
++    auto fsm_cfg = param::config["FSM"][state_string];
++    if (!fsm_cfg) {
++        throw std::runtime_error("State_WBT: no FSM[" + state_string + "] config block");
++    }
++
++    const auto deploy_cfg_path = resolve_path(fsm_cfg["deploy_config"].as<std::string>());
++    const auto policy_path     = resolve_path(fsm_cfg["policy"       ].as<std::string>());
++    const auto motion_path     = resolve_path(fsm_cfg["motion"       ].as<std::string>());
++
++    if (!std::filesystem::exists(deploy_cfg_path)) {
++        throw std::runtime_error("State_WBT: deploy_config missing: " + deploy_cfg_path.string());
++    }
++    if (!std::filesystem::exists(policy_path)) {
++        throw std::runtime_error("State_WBT: policy missing: " + policy_path.string());
++    }
++    if (!std::filesystem::exists(motion_path)) {
++        throw std::runtime_error("State_WBT: motion missing: " + motion_path.string());
++    }
++
++    const YAML::Node deploy_cfg = YAML::LoadFile(deploy_cfg_path.string());
++
++    anchor_body_idx_in_tracked_ = deploy_cfg["anchor_body_idx_in_tracked"]
++        ? deploy_cfg["anchor_body_idx_in_tracked"].as<int>()
++        : 7;
++
++    motion_ = std::make_shared<WBTMotionLoader>(motion_path.string(),
++                                                anchor_body_idx_in_tracked_);
++    spdlog::info("State_WBT: loaded motion '{}'  fps={}  frames={}  duration={:.2f}s",
++                 motion_path.filename().string(),
++                 motion_->fps(), motion_->num_frames(), motion_->duration());
++    motion = motion_;   // publish for obs registrars
++
++    time_range_[0] = fsm_cfg["time_start"]
++        ? std::clamp(fsm_cfg["time_start"].as<float>(), 0.0f, motion_->duration())
++        : 0.0f;
++    time_range_[1] = (fsm_cfg["time_end"] && !fsm_cfg["time_end"].IsNull())
++        ? std::clamp(fsm_cfg["time_end"].as<float>(), 0.0f, motion_->duration())
++        : motion_->duration();
++
++    auto articulation = std::make_shared<unitree::BaseArticulation<LowState_t::SharedPtr>>(
++        FSMState::lowstate);
++
++    env_ = std::make_unique<isaaclab::ManagerBasedRLEnv>(
++        build_env_cfg(deploy_cfg),
++        articulation
++    );
++    env_->alg = std::make_unique<isaaclab::OrtRunner>(policy_path.string());
++
++    // Timeout -> FixStand (clean exit; FixStand interpolates current joint pose
++    // to its stored stand qpos so we don't snap the robot).
++    if (FSMStringMap.right.count("FixStand")) {
++        this->registered_checks.emplace_back(
++            std::make_pair(
++                [this]() -> bool {
++                    return (env_->episode_length * env_->step_dt) > time_range_[1];
++                },
++                FSMStringMap.right.at("FixStand")
++            )
++        );
++    }
++    // Bad-orientation safety -> Passive (same pattern as State_Mimic).
++    if (FSMStringMap.right.count("Passive")) {
++        this->registered_checks.emplace_back(
++            std::make_pair(
++                [this]() -> bool {
++                    return isaaclab::mdp::bad_orientation(env_.get(), 1.0f);
++                },
++                FSMStringMap.right.at("Passive")
++            )
++        );
++    }
++}
++
++void State_WBT::enter()
++{
++    // Set kp / kd from deploy_config.yaml on each motor (joint_ids_map order;
++    // identity for UniLab so policy index == motor index).
++    for (std::size_t i = 0; i < env_->robot->data.joint_stiffness.size(); ++i) {
++        auto& motor = lowcmd->msg_.motor_cmd()[i];
++        motor.kp()  = env_->robot->data.joint_stiffness[i];
++        motor.kd()  = env_->robot->data.joint_damping[i];
++        motor.dq()  = 0.0f;
++        motor.tau() = 0.0f;
++    }
++
++    // Republish loader for obs registrars (no-op if unchanged).
++    motion = motion_;
++    env_->reset();
++
++    // Kick off the policy thread.  Yaw alignment between the (already standing)
++    // robot heading and ref_motion frame 0's anchor heading is computed inside
++    // the thread because env->robot->update() needs to have run at least once
++    // (FixStand's run() loop has been ticking, so root_quat_w is populated).
++    policy_thread_running_.store(true);
++    policy_thread_ = std::thread([this] {
++        using clock = std::chrono::high_resolution_clock;
++        const std::chrono::duration<double> desiredDuration(env_->step_dt);
++        const auto dt = std::chrono::duration_cast<clock::duration>(desiredDuration);
++
++        env_->robot->update();
++        motion_->update(time_range_[0]);
++
++        // init_quat = yaw_align(robot_world, ref_motion_world_at_t0).
++        // Decompose by yaw-only quaternions so we only correct heading, not
++        // pitch/roll drift between robot stance and ref's first frame.
++        const auto ref_yaw   = isaaclab::yawQuaternion(motion_->anchor_quat()).toRotationMatrix();
++        const auto robot_yaw = isaaclab::yawQuaternion(torso_quat_w(env_.get())).toRotationMatrix();
++        init_quat = Eigen::Quaternionf(robot_yaw * ref_yaw.transpose());
++
++        env_->reset();
++        auto sleepTill = clock::now() + dt;
++        while (policy_thread_running_.load()) {
++            env_->robot->update();
++            const float t = env_->episode_length * env_->step_dt + time_range_[0];
++            motion_->update(t);
++            env_->step();
++
++            std::this_thread::sleep_until(sleepTill);
++            sleepTill += dt;
++        }
++    });
++}
++
++void State_WBT::run()
++{
++    // Identity joint_ids_map for UniLab => motor index == policy index.  We
++    // still go through joint_ids_map so a future non-identity remap (e.g.
++    // measured SDK motor order ≠ XML actuator order on real hardware) works.
++    const auto action = env_->action_manager->processed_actions();
++    const auto& ids   = env_->robot->data.joint_ids_map;
++    for (std::size_t i = 0; i < ids.size(); ++i) {
++        lowcmd->msg_.motor_cmd()[static_cast<int>(ids[i])].q() = action[i];
++    }
++}
++
++void State_WBT::exit()
++{
++    policy_thread_running_.store(false);
++    if (policy_thread_.joinable()) {
++        policy_thread_.join();
++    }
++    motion = nullptr;
++}

@@ -2,8 +2,12 @@
 /unitree_mujoco/
 /unitree_rl_lab/
 /unitree_sdk2/
-/onnxruntime-linux-x64-*/
+# Cached onnxruntime archives (arch-specific; setup.sh selects per `uname -m`)
 /onnxruntime-linux-x64-*.tgz
+/onnxruntime-linux-aarch64-*.tgz
+
+# Local PyTorch checkpoints sometimes dropped alongside the deploy assets
+assets/*.pt
 
 # Build artifacts
 build/
@@ -12,6 +16,8 @@ dist/
 *.a
 *.so
 *.so.*
+# scripts/smoke_test_wbt is the compiled binary; source (.cpp) is tracked.
+/scripts/smoke_test_wbt
 
 # Python
 __pycache__/
@@ -21,7 +27,9 @@ __pycache__/
 venv/
 
 # IDE / editor
-.vscode/
 .idea/
 *.swp
 .DS_Store
+# Keep workspace-level VSCode settings (multi-repo scan ignore) — but not user state
+.vscode/*
+!.vscode/settings.json

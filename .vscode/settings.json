@@ -1,0 +1,11 @@
+{
+  "//": "deploy_ws 是顶层 git 仓库；下面四个目录是 setup.sh 拉取的第三方源码，本身各自带 .git。把它们排除掉，VSCode 源代码管理就只显示 deploy_ws 的 diff。",
+  "git.repositoryScanIgnoredFolders": [
+    "unitree_mujoco",
+    "unitree_rl_lab",
+    "unitree_sdk2",
+    "onnxruntime-linux-x64-1.21.0",
+    "onnxruntime-linux-aarch64-1.21.0"
+  ],
+  "git.detectSubmodules": false
+}
