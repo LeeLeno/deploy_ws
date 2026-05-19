@@ -207,10 +207,10 @@ index be40418..dc3a29f 100644
  std::shared_ptr<LowState_t> FSMState::lowstate = nullptr;
 diff --git a/deploy/robots/g1_29dof/src/State_WBT.cpp b/deploy/robots/g1_29dof/src/State_WBT.cpp
 new file mode 100644
-index 0000000..538db46
+index 0000000..13b1ace
 --- /dev/null
 +++ b/deploy/robots/g1_29dof/src/State_WBT.cpp
-@@ -0,0 +1,466 @@
+@@ -0,0 +1,481 @@
 +// SPDX-FileCopyrightText: 2026 deploy_ws (parallel WBT chain).
 +#include "State_WBT.h"
 +
@@ -496,18 +496,33 @@ index 0000000..538db46
 +    static const std::map<std::string, std::string> alias = {
 +        {"command_joint_pos",   "wbt_command_joint_pos"},
 +        {"command_joint_vel",   "wbt_command_joint_vel"},
++        {"motion_anchor_pos_b", "wbt_motion_anchor_pos_b"},   // present only if training enables it
 +        {"motion_anchor_ori_b", "wbt_motion_anchor_ori_b"},
++        {"base_lin_vel",        "base_lin_vel"},              // present only if training enables it
 +        {"gyro",                "base_ang_vel"},
 +        {"joint_pos_rel",       "joint_pos_rel"},
 +        {"dof_vel",             "joint_vel_rel"},
 +        {"last_actions",        "last_action"},
 +    };
 +
++    // Propagate the schema's history mode flag so ObservationManager flattens
++    // the per-term history blocks in the SAME order the training-side actor
++    // assembled them (group-by-term, oldest-first). Defaults to false to match
++    // the v2 schema; legacy single-step bins (no history field) also work.
 +    YAML::Node obs;
++    if (deploy_cfg["use_gym_history"]) {
++        obs["use_gym_history"] = deploy_cfg["use_gym_history"].as<bool>();
++    } else {
++        obs["use_gym_history"] = false;
++    }
++
 +    int obs_total = 0;
 +    for (const auto& seg : deploy_cfg["obs_layout"]) {
 +        const auto unilab_name = seg["name"].as<std::string>();
 +        const auto dim         = seg["dim"].as<int>();
++        // Per-term history_length comes from the yaml; default 1 keeps
++        // back-compat with legacy bins exported before the v2 schema.
++        const int h_len        = seg["history_length"] ? seg["history_length"].as<int>() : 1;
 +        const auto it = alias.find(unilab_name);
 +        if (it == alias.end()) {
 +            throw std::runtime_error("State_WBT: no framework alias for obs segment '"
@@ -517,9 +532,9 @@ index 0000000..538db46
 +        term["params"]         = YAML::Node(YAML::NodeType::Map);   // empty {}
 +        term["clip"]           = YAML::Node();                       // null
 +        term["scale"]          = std::vector<float>(dim, 1.0f);
-+        term["history_length"] = 1;
++        term["history_length"] = h_len;
 +        obs[it->second]        = term;
-+        obs_total             += dim;
++        obs_total             += dim * h_len;
 +    }
 +    cfg["observations"] = obs;
 +
@@ -677,3 +692,6 @@ index 0000000..538db46
 +    }
 +    motion = nullptr;
 +}
+diff --git a/deploy/thirdparty/onnxruntime-linux-x64-1.22.0/lib/libonnxruntime.so.1.22.0 b/deploy/thirdparty/onnxruntime-linux-x64-1.22.0/lib/libonnxruntime.so.1.22.0
+index 58b08f5..f7b5a12 100755
+Binary files a/deploy/thirdparty/onnxruntime-linux-x64-1.22.0/lib/libonnxruntime.so.1.22.0 and b/deploy/thirdparty/onnxruntime-linux-x64-1.22.0/lib/libonnxruntime.so.1.22.0 differ
