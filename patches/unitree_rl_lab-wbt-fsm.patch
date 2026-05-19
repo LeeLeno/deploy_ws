@@ -207,10 +207,10 @@ index be40418..dc3a29f 100644
  std::shared_ptr<LowState_t> FSMState::lowstate = nullptr;
 diff --git a/deploy/robots/g1_29dof/src/State_WBT.cpp b/deploy/robots/g1_29dof/src/State_WBT.cpp
 new file mode 100644
-index 0000000..13b1ace
+index 0000000..8e795de
 --- /dev/null
 +++ b/deploy/robots/g1_29dof/src/State_WBT.cpp
-@@ -0,0 +1,481 @@
+@@ -0,0 +1,485 @@
 +// SPDX-FileCopyrightText: 2026 deploy_ws (parallel WBT chain).
 +#include "State_WBT.h"
 +
@@ -505,17 +505,21 @@ index 0000000..13b1ace
 +        {"last_actions",        "last_action"},
 +    };
 +
-+    // Propagate the schema's history mode flag so ObservationManager flattens
-+    // the per-term history blocks in the SAME order the training-side actor
-+    // assembled them (group-by-term, oldest-first). Defaults to false to match
-+    // the v2 schema; legacy single-step bins (no history field) also work.
-+    YAML::Node obs;
-+    if (deploy_cfg["use_gym_history"]) {
-+        obs["use_gym_history"] = deploy_cfg["use_gym_history"].as<bool>();
-+    } else {
-+        obs["use_gym_history"] = false;
++    // ObservationManager defaults to group-by-term flatten (use_gym_history=false),
++    // which is what the training assembler also uses. The deploy_config.yaml may
++    // include a documentary `use_gym_history` field; we explicitly verify it is
++    // false but do NOT forward it into the obs map: ObservationManager's
++    // _prapare_terms() probes cfg.begin()->second["params"].IsDefined() to detect
++    // schema variants, and a leading scalar entry there triggers BadSubscript.
++    // (See unitree_rl_lab/deploy/include/isaaclab/manager/observation_manager.h.)
++    if (deploy_cfg["use_gym_history"] && deploy_cfg["use_gym_history"].as<bool>()) {
++        throw std::runtime_error(
++            "State_WBT: deploy_config.yaml has use_gym_history=true, which is not "
++            "supported by this build (training assembler emits group-by-term flatten "
++            "instead). Re-export with use_gym_history=false or extend State_WBT.");
 +    }
 +
++    YAML::Node obs;
 +    int obs_total = 0;
 +    for (const auto& seg : deploy_cfg["obs_layout"]) {
 +        const auto unilab_name = seg["name"].as<std::string>();
