@@ -13,15 +13,17 @@ Unitree's open-source stack (`unitree_rl_lab` + `unitree_mujoco` +
 ```
 deploy_ws/
 ├── assets/                 # in-git runtime artifacts
-│   ├── policy.onnx         #   514-d obs (5-step proprio history) → 29-d action
-│   ├── dance1.bin          #   WBT motion clip, header-encoded fps & length
-│   └── deploy_config.yaml  #   obs_layout, kp/kd, action_scale, joint_ids_map
+│   ├── policy.onnx(+.data)                     #   G1SonicMimicDR 140k: obs[1,1570] → action[1,29]; weights in .data (same dir)
+│   ├── dance1_subject2_part.npz / .bin         #   training motion; .bin = scripts/export_motion_bin.py(npz), all 31 bodies
+│   └── sonicmimic_dr_140k_deploy_config.yaml   #   obs_layout, future_steps, default_angles, action_scale
 ├── patches/                # diffs against pinned upstream
 │   ├── unitree_mujoco-g1-scene.patch    # sim2sim: default scene → G1
 │   └── unitree_rl_lab-wbt-fsm.patch     # adds State_WBT to g1_ctrl FSM
 ├── scripts/
 │   ├── setup.sh                 # fetch upstream + apply patches + arch overlay
-│   └── smoke_test_wbt.cpp       # offline ONNX + motion-loader sanity check
+│   ├── export_motion_bin.py     # training NPZ → State_WBT motion .bin
+│   ├── setup_host_deps.sh       # rootless libfmt for the g1_ctrl build
+│   └── parity/                  # offline parity / closed-loop sim / Velocity gate tests (no DDS)
 ├── unitree_mujoco/         # cloned by setup.sh at a pinned SHA
 ├── unitree_rl_lab/         # cloned by setup.sh at a pinned SHA
 └── unitree_sdk2/           # cloned by setup.sh at a pinned SHA
@@ -46,26 +48,30 @@ Controller transitions (trigger names match `config/config.yaml` — `LT` is L2,
 | Velocity           | `LT(2s) + Down`       | Mimic_Dance_102             |
 | Velocity           | `LT(2s) + Left`       | Mimic_Gangnam_Style         |
 | Velocity           | `LT(2s) + Right`      | **Mimic_WBT_Dance1** (ours) |
-| Mimic_WBT_Dance1   | `RB + X`              | FixStand (clean exit)       |
+| Mimic_WBT_Dance1   | `RB + X`              | Velocity (clean exit)       |
 | any RL state       | `LT + B`              | Passive (emergency)         |
 
 `LT(2s)` = hold `LT` ≥2 s **and keep holding** while pressing the direction
 key. Releasing `LT` resets the timer.
 
-Mimic_WBT_Dance1 also auto-falls back to `FixStand` when the clip ends and to
-`Passive` on bad orientation — same safety nets as upstream `State_Mimic`.
+Mimic_WBT_Dance1 also auto-falls back to `Velocity` when the clip ends and to
+`Passive` on bad orientation or a policy fault (non-finite obs/action).
 
 ## Redeploy a new training run
 
 Drop new files into `assets/` (paths in `config.yaml` resolve here):
 
 ```
-assets/policy.onnx          # new actor
-assets/dance1.bin           # new motion clip
-assets/deploy_config.yaml   # obs_layout, gains, joint_ids_map — must match training
+assets/policy.onnx + policy.onnx.data            # new actor (keep together)
+assets/<motion>.bin                              # python3 scripts/export_motion_bin.py <motion>.npz <motion>.bin
+assets/sonicmimic_dr_*_deploy_config.yaml        # must match training
 ```
 
-No rebuild needed. `g1_ctrl` reads these at FSM-entry into `Mimic_WBT_Dance1`.
+Paths and PD gains (`kp`/`kd`, = training MJCF actuator gains) live in
+`config/config.yaml` → `Mimic_WBT_Dance1`.  No rebuild needed; `g1_ctrl` loads
+them at start-up (State_WBT constructor).  Before any robot run, verify offline:
+`PYTHON=<py with mujoco+onnxruntime>=1.18> MESHDIR=<g1 meshes> scripts/parity/run_parity.sh`
+must print `PARITY PASS`.
 
 ## First-time build
 
@@ -90,9 +96,12 @@ cmake .. -DBUILD_EXAMPLES=OFF
 sudo make install
 cd ../..
 
-# 4. build g1_ctrl (WBT is compiled in — no separate target)
+# 4. build g1_ctrl (WBT is compiled in — no separate target).  Links the pinned
+#    unitree_sdk2/lib/<arch>/libunitree_sdk2.a (not /usr/local/lib), so step 3 is
+#    optional.  Without root, `./scripts/setup_host_deps.sh` unpacks libfmt-dev
+#    into deploy_ws/.deps instead of `apt install libfmt-dev`.
 cd unitree_rl_lab/deploy/robots/g1_29dof && mkdir -p build && cd build
-cmake .. && make -j$(nproc)        # produces ./g1_ctrl
+cmake .. && make -j$(nproc)        # produces ./g1_ctrl (building does not start it)
 ```
 
 First build on NX: ~15–25 min. Incremental rebuilds after editing `State_WBT.*`
@@ -115,21 +124,13 @@ cd deploy/robots/g1_29dof/build && make -j$(nproc)
 patches. When the diff grows past a couple of files, switch to a personal fork
 pinned as a submodule.
 
-## Offline smoke test (optional)
-
-Exercises the motion loader, the yaw-aligned `motion_anchor_ori_b` math, and a
-forward pass through `policy.onnx` — no DDS, no robot.
+## Offline numerical checks (no DDS, no robot)
 
 ```bash
-g++ -std=c++17 -O2 \
-    -I /usr/include/eigen3 \
-    -I unitree_rl_lab/deploy/thirdparty/onnxruntime-linux-x64-1.22.0/include \
-    scripts/smoke_test_wbt.cpp \
-    unitree_rl_lab/deploy/thirdparty/onnxruntime-linux-x64-1.22.0/lib/libonnxruntime.so.1.22.0 \
-    -o scripts/smoke_test_wbt
-
-LD_LIBRARY_PATH=unitree_rl_lab/deploy/thirdparty/onnxruntime-linux-x64-1.22.0/lib \
-./scripts/smoke_test_wbt
+# C++ WBTPolicy vs UniLab sim_prototype.py on the same sensor trace (tol 1e-4)
+PYTHON=<python with mujoco, onnxruntime>=1.18> MESHDIR=<g1 mesh dir> scripts/parity/run_parity.sh
+# Velocity state never publishes before its first inference
+scripts/parity/run_rlbase_gate_test.sh
 ```
 
 ## Pinned versions

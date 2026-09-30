@@ -16,8 +16,6 @@ dist/
 *.a
 *.so
 *.so.*
-# scripts/smoke_test_wbt is the compiled binary; source (.cpp) is tracked.
-/scripts/smoke_test_wbt
 
 # Python
 __pycache__/
@@ -33,3 +31,4 @@ venv/
 # Keep workspace-level VSCode settings (multi-repo scan ignore) — but not user state
 .vscode/*
 !.vscode/settings.json
+.deps/
