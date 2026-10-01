@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3)",
+      "Bash(find ~/projects/agents-a7cf9ff938/unitree_rl_lab/deploy/include/FSM -type f | head; echo \"---\"; grep -n \"registered_checks\\\\|tick\\\\|run\\(\\)\\\\|enter\\(\\)\\\\|exit\\(\\)\" ~/lxf/deploy_ws/unitree_rl_lab/deploy/include/FSM/CtrlFSM.h | head -30)",
+      "Read(//home/unitree/projects/agents-a7cf9ff938/unitree_rl_lab/deploy/include/**)",
+      "Bash(find ~/projects/agents-a7cf9ff938/unitree_rl_lab/deploy -name \"CtrlFSM.h\" 2>/dev/null)",
+      "Read(//home/unitree/projects/agents-a7cf9ff938/unitree_rl_lab/**)",
+      "Read(//home/unitree/lxf/**)",
+      "Bash(tar --exclude='agents-a7cf9ff938/unitree_rl_lab/deploy/robots/g1_29dof/build/core.*' -czf /home/unitree/agents-a7cf9ff938-deploy-20260520.tar.gz agents-a7cf9ff938/)",
+      "Bash(tar --exclude='agents-a7cf9ff938/unitree_rl_lab/deploy/robots/g1_29dof/build/core.*' -czf /home/unitree/agents-a7cf9ff938-deploy-20260520.tar.gz -C /home/unitree/lxf agents-a7cf9ff938)",
+      "Read(//home/unitree/**)",
+      "Bash(mount)",
+      "Bash(rm -f /home/unitree/agents-a7cf9ff938-deploy-20260520.tar.gz)",
+      "Bash(tar --exclude=deploy_ws/unitree_rl_lab/deploy/robots/g1_29dof/build/core.* --transform=s,^deploy_ws,agents-a7cf9ff938, -czf /home/unitree/agents-a7cf9ff938-deploy-20260520.tar.gz -C /home/unitree/lxf deploy_ws)",
+      "Bash(tar -tzf /home/unitree/agents-a7cf9ff938-deploy-20260520.tar.gz)",
+      "Bash(grep -E \"\\(State_WBT\\\\.cpp|g1_29dof/config/config\\\\.yaml\\)$\")",
+      "Bash(grep -E \"build/g1_ctrl$|build/libg1_29dof_controller_lib\\\\.a$\")",
+      "Bash(grep -E \"^agents-a7cf9ff938/assets/\\(policy\\\\.onnx|deploy_config\\\\.yaml|dance1\\\\.bin\\)$\")",
+      "Bash(awk -F/ '{print $1\"/\"$2}')"
+    ],
+    "additionalDirectories": [
+      "/home/unitree/lxf/UniLab/scripts/deploy"
+    ]
+  }
+}

@@ -150,3 +150,8 @@ any patch whose context shifted, and commit.
 See upstream `unitree_rl_lab/README.md` → "Deploy → Sim2Sim". Our
 `unitree_mujoco-g1-scene.patch` already flips `simulate/config.yaml` to `g1` /
 `scene_29dof.xml`.
+
+  cd /home/unitree/ws/sonicmimic_dr/deploy_ws/unitree_rl_lab/deploy/robots/g1_29dof/build
+  chmod u+x g1_ctrl                 # 我之前去掉了执行权限防误启动，这一步解除
+  ./g1_ctrl --network eth0 --log    # --log 会写日志到 g1_29dof/log/log.txt
+  
