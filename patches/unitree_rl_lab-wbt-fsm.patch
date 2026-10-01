@@ -87,6 +87,136 @@ index 3e66adb..7368ae5 100644
  private:
      Ort::Env env;
      Ort::SessionOptions session_options;
+diff --git a/deploy/include/isaaclab/assets/articulation/articulation.h b/deploy/include/isaaclab/assets/articulation/articulation.h
+index 6db9f40..7544660 100644
+--- a/deploy/include/isaaclab/assets/articulation/articulation.h
++++ b/deploy/include/isaaclab/assets/articulation/articulation.h
+@@ -31,6 +31,11 @@ struct ArticulationData
+     // Root angular velocity in base world frame.
+     Eigen::Vector3f root_ang_vel_b;
+ 
++    // Angular velocity of the torso link in the torso frame.  Unitree's
++    // low-state packet exposes the pelvis IMU; the deploy adapter reconstructs
++    // this training-side torso-gyro quantity from that IMU and waist rates.
++    Eigen::Vector3f torso_ang_vel_b;
++
+     // Projection of the gravity direction on base frame.
+     Eigen::Vector3f projected_gravity_b;
+ 
+@@ -51,4 +56,4 @@ public:
+     ArticulationData data;
+ };
+ 
+-};
+\ No newline at end of file
++};
+diff --git a/deploy/include/isaaclab/envs/mdp/actions/joint_actions.h b/deploy/include/isaaclab/envs/mdp/actions/joint_actions.h
+index 23f280d..a2807db 100644
+--- a/deploy/include/isaaclab/envs/mdp/actions/joint_actions.h
++++ b/deploy/include/isaaclab/envs/mdp/actions/joint_actions.h
+@@ -34,18 +34,25 @@ public:
+         if(!cfg["clip"].IsNull()) {
+             _clip = cfg["clip"].as<std::vector<std::vector<float> >>();
+         }
++        _simulate_action_latency = cfg["simulate_action_latency"].IsDefined()
++            ? cfg["simulate_action_latency"].as<bool>() : false;
++        _previous_raw_actions.resize(_action_dim, 0.0f);
+     }
+ 
+     virtual void process_actions(std::vector<float> actions)
+     {
+         // TODO: modify action by joint_ids
++        if (_simulate_action_latency) {
++            _previous_raw_actions = _raw_actions;
++        }
+         _raw_actions = actions;
++        const auto& action_for_target = _simulate_action_latency ? _previous_raw_actions : _raw_actions;
+         for(int i(0); i<_action_dim; ++i)
+         {
+             if(!_scale.empty()) {
+-                _processed_actions[i] = _raw_actions[i] * _scale[i];
++                _processed_actions[i] = action_for_target[i] * _scale[i];
+             } else {
+-                _processed_actions[i] = _raw_actions[i];
++                _processed_actions[i] = action_for_target[i];
+             }
+             if(!_offset.empty()) {
+                 _processed_actions[i] += _offset[i];
+@@ -78,6 +85,7 @@ public:
+     void reset()
+     {
+         _raw_actions.assign(_action_dim, 0.0f);
++        _previous_raw_actions.assign(_action_dim, 0.0f);
+     }
+ 
+ protected:
+@@ -90,6 +98,8 @@ protected:
+     std::vector<float> _scale;
+     std::vector<float> _offset;
+     std::vector<std::vector<float> > _clip;
++    bool _simulate_action_latency = false;
++    std::vector<float> _previous_raw_actions;
+ };
+ 
+ 
+@@ -114,4 +124,4 @@ public:
+ REGISTER_ACTION(JointPositionAction);
+ REGISTER_ACTION(JointVelocityAction);
+ 
+-};
+\ No newline at end of file
++};
+diff --git a/deploy/include/isaaclab/envs/mdp/observations/observations.h b/deploy/include/isaaclab/envs/mdp/observations/observations.h
+index 978a918..a9e0f3d 100644
+--- a/deploy/include/isaaclab/envs/mdp/observations/observations.h
++++ b/deploy/include/isaaclab/envs/mdp/observations/observations.h
+@@ -13,7 +13,7 @@ namespace mdp
+ REGISTER_OBSERVATION(base_ang_vel)
+ {
+     auto & asset = env->robot;
+-    auto & data = asset->data.root_ang_vel_b;
++    auto & data = asset->data.torso_ang_vel_b;
+     return std::vector<float>(data.data(), data.data() + data.size());
+ }
+ 
+@@ -137,4 +137,4 @@ REGISTER_OBSERVATION(gait_phase)
+ }
+ 
+ }
+-}
+\ No newline at end of file
++}
+diff --git a/deploy/include/unitree_articulation.h b/deploy/include/unitree_articulation.h
+index 40b7572..5986f60 100644
+--- a/deploy/include/unitree_articulation.h
++++ b/deploy/include/unitree_articulation.h
+@@ -38,9 +38,24 @@ public:
+             data.joint_pos[i] = lowstate->msg_.motor_state()[data.joint_ids_map[i]].q();
+             data.joint_vel[i] = lowstate->msg_.motor_state()[data.joint_ids_map[i]].dq();
+         }
++        // Reconstruct the MuJoCo `torso_gyro` sensor used by the MimicLite
++        // actor.  The low-state IMU is at the pelvis; waist joints 12/13/14
++        // are yaw/roll/pitch in the training and SDK order.
++        const Eigen::AngleAxisf yaw(data.joint_pos[12], Eigen::Vector3f::UnitZ());
++        const Eigen::AngleAxisf roll(data.joint_pos[13], Eigen::Vector3f::UnitX());
++        const Eigen::AngleAxisf pitch(data.joint_pos[14], Eigen::Vector3f::UnitY());
++        const Eigen::Matrix3f R_p = data.root_quat_w.toRotationMatrix();
++        const Eigen::Matrix3f R_y = yaw.toRotationMatrix();
++        const Eigen::Matrix3f R_r = roll.toRotationMatrix();
++        const Eigen::Matrix3f R_t = R_p * R_y * R_r * pitch.toRotationMatrix();
++        const Eigen::Vector3f omega_b = data.root_ang_vel_b
++            + Eigen::Vector3f(0.0f, 0.0f, data.joint_vel[12])
++            + R_y * Eigen::Vector3f(data.joint_vel[13], 0.0f, 0.0f)
++            + R_y * R_r * Eigen::Vector3f(0.0f, data.joint_vel[14], 0.0f);
++        data.torso_ang_vel_b = R_t.transpose() * (R_p * omega_b);
+     }
+ 
+     LowStatePtr lowstate;
+ };
+ 
+-}
+\ No newline at end of file
++}
 diff --git a/deploy/robots/g1_29dof/CMakeLists.txt b/deploy/robots/g1_29dof/CMakeLists.txt
 index 0e29419..1b00612 100644
 --- a/deploy/robots/g1_29dof/CMakeLists.txt
@@ -120,7 +250,7 @@ index 0e29419..1b00612 100644
    ${PROJECT_SOURCE_DIR}/../../thirdparty/onnxruntime-linux-x64-1.22.0/lib/libonnxruntime.so.1.22.0
  )
 diff --git a/deploy/robots/g1_29dof/config/config.yaml b/deploy/robots/g1_29dof/config/config.yaml
-index 8cc97fe..c8f9f76 100644
+index 8cc97fe..ab512f3 100644
 --- a/deploy/robots/g1_29dof/config/config.yaml
 +++ b/deploy/robots/g1_29dof/config/config.yaml
 @@ -15,6 +15,11 @@ FSM:
@@ -157,25 +287,25 @@ index 8cc97fe..c8f9f76 100644
        Passive: LT + B.on_pressed
        Velocity: RB + X.on_pressed
      fps: 60
-@@ -87,3 +93,35 @@ FSM:
+@@ -87,3 +93,34 @@ FSM:
      time_start: 5.2
      time_end: 25.5
  
 +  # deploy_ws: parallel WBT chain.  Source of truth = deploy_ws/assets/* (paths
 +  # resolve from this controller's project root: g1_29dof/).  Current policy:
-+  # UniLab G1SonicMimicDR 140k (1570-d obs -> 29-d action).
++  # UniLab G1MotionTrackingSAC MimicLite-obs DR 140k (397-d obs -> 29-d action).
 +  Mimic_WBT_Dance1:
 +    transitions:
 +      Passive: LT + B.on_pressed
 +      Velocity: RB + X.on_pressed
-+    deploy_config: ../../../../assets/sonicmimic_dr_140k_deploy_config.yaml
++    deploy_config: ../../../../assets/mimiclite_dr_140k_deploy_config.yaml
 +    # policy.onnx keeps its weights in policy.onnx.data — both must sit in the same dir.
 +    policy:        ../../../../assets/policy.onnx
 +    # generated from dance1_subject2_part.npz by scripts/export_motion_bin.py (all 31 bodies)
 +    motion:        ../../../../assets/dance1_subject2_part.bin
 +    # Nominal PD gains (SDK motor order) = position-actuator kp / kv of the
-+    # training MJCF (UniLab src/unilab/assets/robots/g1/g1.xml); DR scales them
-+    # by [0.9, 1.1] / [0.85, 1.15] around these values.
++    # training MJCF (UniLab src/unilab/assets/robots/g1/g1.xml).  The training
++    # DR randomizes these gains, while deployment uses the nominal contract.
 +    kp: [
 +      40.179, 99.098, 40.179, 99.098, 28.501, 28.501,
 +      40.179, 99.098, 40.179, 99.098, 28.501, 28.501,
@@ -192,7 +322,6 @@ index 8cc97fe..c8f9f76 100644
 +    ]
 +    time_start: 0.0   # clip time [s]; rounded to a motion frame (50 fps)
 +    # time_end: null  # clip time [s]; null/omitted = play through the last frame
-+
 diff --git a/deploy/robots/g1_29dof/include/State_WBT.h b/deploy/robots/g1_29dof/include/State_WBT.h
 new file mode 100755
 index 0000000..0df7514
@@ -259,29 +388,25 @@ index 0000000..0df7514
 +REGISTER_FSM(State_WBT)
 diff --git a/deploy/robots/g1_29dof/include/WBT_Policy.h b/deploy/robots/g1_29dof/include/WBT_Policy.h
 new file mode 100644
-index 0000000..988dee0
+index 0000000..7ab2c61
 --- /dev/null
 +++ b/deploy/robots/g1_29dof/include/WBT_Policy.h
-@@ -0,0 +1,147 @@
+@@ -0,0 +1,142 @@
 +// SPDX-FileCopyrightText: 2026 deploy_ws (parallel WBT chain — independent of
 +//   upstream State_Mimic; do not delete in upstream sync).
 +//
 +// WBTPolicy — DDS-free computational core of State_WBT for the UniLab
-+// G1SonicMimicDR actor (1570-d obs -> 29-d action).  It owns the
++// G1MotionTrackingSAC MimicLite actor (397-d obs -> 29-d action).  It owns the
 +// ManagerBasedRLEnv (obs/action managers + OrtRunner) and the motion clip, and
 +// implements the deploy contract of
-+//   UniLab conf/warpsac/task/sonicmimic/mjwarp_dr.yaml  +  tmp/sim_prototype.py
++//   UniLab conf/warpsac/task/g1_motion_tracking/mjwarp_mimiclite_dr.yaml
++//   + tmp/sim_prototype_mimiclite.py
 +// Nothing here touches DDS / LowCmd, so the offline parity test links it
 +// against a fake LowState (deploy_ws/scripts/parity/).
 +//
-+// Actor obs (group-by-term flatten, rows oldest -> newest), offsets in floats:
-+//   base_ang_vel          [   0,  30)  3 x 10  IMU gyro (pelvis)
-+//   joint_pos             [  30, 320) 29 x 10  q - default_angles
-+//   joint_vel             [ 320, 610) 29 x 10  dq
-+//   actions               [ 610, 900) 29 x 10  previous raw policy output
-+//   command_multi_future  [ 900,1540) 640      10 frames x [ref q(29), ref dq(29), ori6d(6)]
-+//   projected_gravity     [1540,1570)  3 x 10  R(pelvis)^T * [0,0,-1]
-+// (the actual offsets are derived from deploy_config.yaml obs_layout.)
++// The MimicLite actor order is: last_action(29), reference root position
++// (8x3), root orientation (8x6), reference joints (8x29), torso gyro(3),
++// projected gravity(3), raw joint position(29), and raw joint velocity(29).
 +#pragma once
 +
 +#include "isaaclab/envs/manager_based_rl_env.h"
@@ -313,7 +438,7 @@ index 0000000..988dee0
 +class WBTMotionLoader
 +{
 +public:
-+    WBTMotionLoader(const std::string& path, int anchor_body_idx);
++    WBTMotionLoader(const std::string& path, int anchor_body_idx, int root_body_idx);
 +
 +    int fps()        const { return fps_; }
 +    int num_frames() const { return num_frames_; }
@@ -323,6 +448,7 @@ index 0000000..988dee0
 +
 +    const float* joint_pos(int frame) const { return &joint_pos_[static_cast<std::size_t>(frame) * num_joints_]; }
 +    const float* joint_vel(int frame) const { return &joint_vel_[static_cast<std::size_t>(frame) * num_joints_]; }
++    const Eigen::Vector3f& root_pos(int frame) const { return root_pos_w_[frame]; }
 +    const Eigen::Quaternionf& anchor_quat(int frame) const { return anchor_quat_w_[frame]; }
 +
 +private:
@@ -331,9 +457,11 @@ index 0000000..988dee0
 +    int num_joints_ = 0;
 +    int num_bodies_ = 0;
 +    int anchor_idx_ = 0;
++    int root_idx_ = 0;
 +
 +    std::vector<float>              joint_pos_;      // (F*J)
 +    std::vector<float>              joint_vel_;      // (F*J)
++    std::vector<Eigen::Vector3f>     root_pos_w_;    // (F), raw NPZ root body
 +    std::vector<Eigen::Quaternionf> anchor_quat_w_;  // (F) wxyz, as stored
 +};
 +
@@ -341,7 +469,7 @@ index 0000000..988dee0
 +class WBTPolicy
 +{
 +public:
-+    // deploy_cfg: assets/sonicmimic_dr_*_deploy_config.yaml.  kp / kd: motor
++    // deploy_cfg: assets/mimiclite_dr_*_deploy_config.yaml.  kp / kd: motor
 +    // gains in SDK order (config.yaml FSM block).  robot: articulation whose
 +    // update() snapshots the sensors (BaseArticulation<LowState> on the robot).
 +    WBTPolicy(const YAML::Node& deploy_cfg,
@@ -355,13 +483,10 @@ index 0000000..988dee0
 +    // env()->robot->update(); neither re-reads the sensors.
 +    //
 +    // begin(): start a fresh episode at start_frame — yaw-align the reference
-+    // to the current torso heading, zero the last action, and prime every
-+    // history row with this snapshot.  The step() that follows on the SAME
-+    // snapshot therefore sees all 10 rows equal to it (sim_prototype's first
-+    // push), which is also what makes re-entry independent of the last run.
++    // to the current anchor heading and reset the one-step action delay.
 +    void begin(int start_frame);
-+    // step(): assemble obs at frame(), run the policy, q_target = a*scale + default
-+    // (no clip, no filter, no latency), then advance to the next motion frame.
++    // step(): assemble obs at frame(), run the policy, and expose the physical
++    // target after the configured one-control-step action delay.
 +    // Throws on non-finite obs / action (the action is then NOT applied).
 +    void step();
 +
@@ -377,14 +502,12 @@ index 0000000..988dee0
 +    const WBTMotionLoader&        motion() const { return *motion_; }
 +    isaaclab::ManagerBasedRLEnv*  env()          { return env_.get(); }
 +
-+    // Torso (anchor) orientation in world from the snapshot: pelvis IMU quat
-+    // followed by waist yaw(Z) / roll(X) / pitch(Y).  Exact for the G1 MJCF,
-+    // whose waist_yaw_link / waist_roll_link / torso_link bodies carry no
-+    // fixed rotation.  Policy-order joint indices 12/13/14.
 +    static Eigen::Quaternionf torso_quat_w(const isaaclab::ArticulationData& data);
++    static Eigen::Quaternionf projected_yaw_quat(const Eigen::Quaternionf& quat);
 +
-+    // wbt_command_multi_future registrar body (640-d).
-+    std::vector<float> command_multi_future(const isaaclab::ManagerBasedRLEnv* env) const;
++    std::vector<float> ref_root_pos_future_local(const isaaclab::ManagerBasedRLEnv* env) const;
++    std::vector<float> ref_root_ori_future_b(const isaaclab::ManagerBasedRLEnv* env) const;
++    std::vector<float> ref_joint_pos_future(const isaaclab::ManagerBasedRLEnv* env) const;
 +
 +    // The registrar reads the active WBT policy through this pointer; set by
 +    // the constructor and by begin().
@@ -399,6 +522,7 @@ index 0000000..988dee0
 +    std::unique_ptr<isaaclab::ManagerBasedRLEnv> env_;
 +
 +    std::vector<int> future_steps_;
++    bool anchor_is_pelvis_ = true;
 +    int  obs_dim_    = 0;
 +    int  action_dim_ = 0;
 +    int  frame_      = 0;
@@ -607,10 +731,10 @@ index 0000000..b8a57c4
 +}
 diff --git a/deploy/robots/g1_29dof/src/WBT_Policy.cpp b/deploy/robots/g1_29dof/src/WBT_Policy.cpp
 new file mode 100644
-index 0000000..9a41cfa
+index 0000000..0d226fd
 --- /dev/null
 +++ b/deploy/robots/g1_29dof/src/WBT_Policy.cpp
-@@ -0,0 +1,366 @@
+@@ -0,0 +1,445 @@
 +// SPDX-FileCopyrightText: 2026 deploy_ws (parallel WBT chain).
 +#include "WBT_Policy.h"
 +
@@ -631,8 +755,8 @@ index 0000000..9a41cfa
 +// WBTMotionLoader
 +// ---------------------------------------------------------------------------
 +
-+WBTMotionLoader::WBTMotionLoader(const std::string& path, int anchor_body_idx)
-+: anchor_idx_(anchor_body_idx)
++WBTMotionLoader::WBTMotionLoader(const std::string& path, int anchor_body_idx, int root_body_idx)
++: anchor_idx_(anchor_body_idx), root_idx_(root_body_idx)
 +{
 +    std::ifstream f(path, std::ios::binary);
 +    if (!f.is_open()) {
@@ -652,7 +776,7 @@ index 0000000..9a41cfa
 +    if (fps_ <= 0 || num_frames_ <= 0 || num_joints_ <= 0 || num_bodies_ <= 0) {
 +        throw std::runtime_error("WBTMotionLoader: bad header in " + path);
 +    }
-+    if (anchor_idx_ < 0 || anchor_idx_ >= num_bodies_) {
++    if (anchor_idx_ < 0 || anchor_idx_ >= num_bodies_ || root_idx_ < 0 || root_idx_ >= num_bodies_) {
 +        throw std::runtime_error("WBTMotionLoader: anchor idx " + std::to_string(anchor_idx_)
 +                                 + " out of range [0," + std::to_string(num_bodies_) + ")");
 +    }
@@ -674,7 +798,16 @@ index 0000000..9a41cfa
 +    const std::size_t F = num_frames_, J = num_joints_, B = num_bodies_;
 +    joint_pos_ = read_block(F * J);
 +    joint_vel_ = read_block(F * J);
-+    (void)read_block(F * B * 3);   // body_pos_w: not an actor input
++    {
++        const auto buf = read_block(F * B * 3);
++        root_pos_w_.resize(F);
++        for (std::size_t frame = 0; frame < F; ++frame) {
++            const float* p = buf.data() + frame * B * 3;
++            root_pos_w_[frame] = Eigen::Vector3f(p[root_idx_ * 3],
++                                                 p[root_idx_ * 3 + 1],
++                                                 p[root_idx_ * 3 + 2]);
++        }
++    }
 +    {
 +        // body_quat_w wxyz: keep the anchor column exactly as stored (the
 +        // training command and sim_prototype.py do not re-normalise).
@@ -699,25 +832,34 @@ index 0000000..9a41cfa
 +
 +
 +// ---------------------------------------------------------------------------
-+// Observation registrar.  `wbt_` prefix avoids collisions with State_Mimic's
-+// motion_* registrations.
++// Observation registrars.  `wbt_` prefixes avoid collisions with upstream
++// registrations while keeping the deploy contract explicit.
 +// ---------------------------------------------------------------------------
 +
 +WBTPolicy* WBTPolicy::active = nullptr;
 +
 +namespace isaaclab { namespace mdp {
 +
-+// UniLab motion_command_multi_future: for each future step k,
-+//   f = min(frame + k, last_frame)
-+//   [ref joint_pos(f) (29), ref joint_vel(f) (29), R(q_torso^-1 * init * q_ref_anchor(f))[:, :2] (6)]
-+// flattened frame-major; R[:, :2] row-major = R00 R01 R10 R11 R20 R21
-+// (np_matrix_first_two_cols_from_quat).
-+REGISTER_OBSERVATION(wbt_command_multi_future)
++REGISTER_OBSERVATION(wbt_ref_root_pos_future_local)
 +{
 +    if (!WBTPolicy::active) {
-+        throw std::runtime_error("wbt_command_multi_future: no active WBTPolicy");
++        throw std::runtime_error("wbt_ref_root_pos_future_local: no active WBTPolicy");
 +    }
-+    return WBTPolicy::active->command_multi_future(env);
++    return WBTPolicy::active->ref_root_pos_future_local(env);
++}
++REGISTER_OBSERVATION(wbt_ref_root_ori_future_b)
++{
++    if (!WBTPolicy::active) {
++        throw std::runtime_error("wbt_ref_root_ori_future_b: no active WBTPolicy");
++    }
++    return WBTPolicy::active->ref_root_ori_future_b(env);
++}
++REGISTER_OBSERVATION(wbt_ref_joint_pos_future)
++{
++    if (!WBTPolicy::active) {
++        throw std::runtime_error("wbt_ref_joint_pos_future: no active WBTPolicy");
++    }
++    return WBTPolicy::active->ref_joint_pos_future(env);
 +}
 +
 +}}  // namespace isaaclab::mdp
@@ -735,23 +877,74 @@ index 0000000..9a41cfa
 +         * Eigen::AngleAxisf(data.joint_pos[14], Eigen::Vector3f::UnitY());
 +}
 +
-+std::vector<float> WBTPolicy::command_multi_future(const isaaclab::ManagerBasedRLEnv* env) const
++Eigen::Quaternionf WBTPolicy::projected_yaw_quat(const Eigen::Quaternionf& quat)
 +{
-+    const Eigen::Quaternionf robot_inv = torso_quat_w(env->robot->data).conjugate();
-+    const int J    = motion_->num_joints();
-+    const int last = motion_->last_frame();
++    const Eigen::Matrix3f R = quat.toRotationMatrix();
++    const Eigen::Vector3f x = R.col(0), z = R.col(2);
++    Eigen::Vector2f heading;
++    if (x.head<2>().norm() > 0.1f) {
++        heading = x.head<2>();
++    } else {
++        if (x.z() < 0.0f) {
++            heading = z.head<2>();
++        } else {
++            heading = -z.head<2>();
++        }
++    }
++    return Eigen::Quaternionf(Eigen::AngleAxisf(std::atan2(heading.y(), heading.x()),
++                                                 Eigen::Vector3f::UnitZ()));
++}
 +
++static int clamp_motion_frame(int frame, int step, int last)
++{
++    return std::clamp(frame + step, 0, last);
++}
++
++std::vector<float> WBTPolicy::ref_root_pos_future_local(const isaaclab::ManagerBasedRLEnv* env) const
++{
++    const auto root_quat = env->robot->data.root_quat_w;
++    const auto root_yaw = projected_yaw_quat(root_quat);
++    const int last = motion_->last_frame();
++    const auto current_ref = motion_->root_pos(frame_);
 +    std::vector<float> out;
-+    out.reserve(future_steps_.size() * (2 * J + 6));
++    out.reserve(future_steps_.size() * 3);
++    // No global root-position sensor exists on the G1 low state.  The
++    // deployment reference is therefore anchored at the current clip root;
++    // future displacements retain the training term's local-frame semantics.
 +    for (const int step : future_steps_) {
-+        const int f = std::min(frame_ + step, last);
++        const auto p = motion_->root_pos(clamp_motion_frame(frame_, step, last));
++        const auto local = root_yaw.conjugate() * (p - current_ref);
++        out.insert(out.end(), local.data(), local.data() + 3);
++    }
++    return out;
++}
++
++std::vector<float> WBTPolicy::ref_root_ori_future_b(const isaaclab::ManagerBasedRLEnv* env) const
++{
++    const Eigen::Quaternionf anchor_quat = anchor_is_pelvis_
++        ? env->robot->data.root_quat_w : torso_quat_w(env->robot->data);
++    const Eigen::Quaternionf robot_inv = anchor_quat.conjugate();
++    const int last = motion_->last_frame();
++    std::vector<float> out;
++    out.reserve(future_steps_.size() * 6);
++    for (const int step : future_steps_) {
++        const int f = clamp_motion_frame(frame_, step, last);
++        const Eigen::Matrix3f R = (robot_inv * (init_quat_ * motion_->anchor_quat(f))).toRotationMatrix();
++        out.push_back(R(0, 0)); out.push_back(R(0, 1)); out.push_back(R(0, 2));
++        out.push_back(R(1, 0)); out.push_back(R(1, 1)); out.push_back(R(1, 2));
++    }
++    return out;
++}
++
++std::vector<float> WBTPolicy::ref_joint_pos_future(const isaaclab::ManagerBasedRLEnv*) const
++{
++    const int last = motion_->last_frame();
++    const int J = motion_->num_joints();
++    std::vector<float> out;
++    out.reserve(future_steps_.size() * J);
++    for (const int step : future_steps_) {
++        const int f = clamp_motion_frame(frame_, step, last);
 +        out.insert(out.end(), motion_->joint_pos(f), motion_->joint_pos(f) + J);
-+        out.insert(out.end(), motion_->joint_vel(f), motion_->joint_vel(f) + J);
-+        const Eigen::Matrix3f R =
-+            (robot_inv * (init_quat_ * motion_->anchor_quat(f))).toRotationMatrix();
-+        out.push_back(R(0, 0));  out.push_back(R(0, 1));
-+        out.push_back(R(1, 0));  out.push_back(R(1, 1));
-+        out.push_back(R(2, 0));  out.push_back(R(2, 1));
 +    }
 +    return out;
 +}
@@ -784,6 +977,8 @@ index 0000000..9a41cfa
 +    jpa["offset"]      = default_angles;
 +    jpa["clip"]        = YAML::Node();   // null -> no clip
 +    jpa["joint_ids"]   = YAML::Node();   // null -> all joints
++    jpa["simulate_action_latency"] = deploy_cfg["simulate_action_latency"].IsDefined()
++        ? deploy_cfg["simulate_action_latency"].as<bool>() : false;
 +    cfg["actions"]["JointPositionAction"] = jpa;
 +
 +    // -- observations, in the exact obs_layout order (yaml-cpp maps preserve
@@ -791,10 +986,12 @@ index 0000000..9a41cfa
 +    // UniLab actor term -> framework registrar.
 +    static const std::map<std::string, std::string> alias = {
 +        {"base_ang_vel",         "base_ang_vel"},              // IMU gyroscope
-+        {"joint_pos",            "joint_pos_rel"},             // q - default_joint_pos
++        {"joint_pos",            "joint_pos"},                 // raw q (MimicLite)
 +        {"joint_vel",            "joint_vel_rel"},             // raw dq
-+        {"actions",              "last_action"},               // previous raw action
-+        {"command_multi_future", "wbt_command_multi_future"},
++        {"last_action",          "last_action"},
++        {"ref_root_pos_future_local", "wbt_ref_root_pos_future_local"},
++        {"ref_root_ori_future_b", "wbt_ref_root_ori_future_b"},
++        {"ref_joint_pos_future", "wbt_ref_joint_pos_future"},
 +        {"projected_gravity",    "projected_gravity"},         // root_quat_w^-1 * [0,0,-1]
 +    };
 +
@@ -845,22 +1042,17 @@ index 0000000..9a41cfa
 +    if (deploy_cfg["use_gym_history"] && deploy_cfg["use_gym_history"].as<bool>()) {
 +        throw std::runtime_error("WBTPolicy: use_gym_history=true is not supported");
 +    }
-+    if (deploy_cfg["simulate_action_latency"] && deploy_cfg["simulate_action_latency"].as<bool>()) {
-+        throw std::runtime_error("WBTPolicy: simulate_action_latency=true is not supported");
-+    }
 +    if (deploy_cfg["ema_alpha"] && deploy_cfg["ema_alpha"].as<float>() != 1.0f) {
 +        throw std::runtime_error("WBTPolicy: ema_alpha != 1 (action filter) is not supported");
 +    }
-+    if (deploy_cfg["anchor_body_name"] && deploy_cfg["anchor_body_name"].as<std::string>() != "torso_link") {
-+        throw std::runtime_error("WBTPolicy: anchor_body_name must be torso_link (torso_quat_w chain)");
-+    }
++    anchor_is_pelvis_ = !deploy_cfg["anchor_body_name"]
++        || deploy_cfg["anchor_body_name"].as<std::string>() == "pelvis";
 +
 +    obs_dim_      = deploy_cfg["obs_dim"].as<int>();
 +    action_dim_   = deploy_cfg["action_dim"].as<int>();
 +    future_steps_ = deploy_cfg["future_steps"].as<std::vector<int>>();
-+    if (future_steps_.empty()
-+        || *std::min_element(future_steps_.begin(), future_steps_.end()) < 0) {
-+        throw std::runtime_error("WBTPolicy: future_steps must be non-empty and non-negative");
++    if (future_steps_.empty()) {
++        throw std::runtime_error("WBTPolicy: future_steps must be non-empty");
 +    }
 +    const auto default_angles = deploy_cfg["default_angles"].as<std::vector<float>>();
 +    if (static_cast<int>(default_angles.size()) != action_dim_
@@ -870,7 +1062,9 @@ index 0000000..9a41cfa
 +    }
 +
 +    motion_ = std::make_shared<WBTMotionLoader>(
-+        motion_path, deploy_cfg["anchor_body_idx_in_motion"].as<int>());
++        motion_path,
++        deploy_cfg["anchor_body_idx_in_motion"].as<int>(),
++        deploy_cfg["root_body_idx_in_motion"].as<int>());
 +    if (motion_->num_joints() != action_dim_) {
 +        throw std::runtime_error("WBTPolicy: motion joints (" + std::to_string(motion_->num_joints())
 +                                 + ") != action_dim (" + std::to_string(action_dim_) + ")");
@@ -881,9 +1075,16 @@ index 0000000..9a41cfa
 +                                 + " != 1/ctrl_dt (one motion frame per policy step)");
 +    }
 +    for (const auto& seg : deploy_cfg["obs_layout"]) {
-+        if (seg["name"].as<std::string>() == "command_multi_future"
-+            && seg["dim"].as<int>() != static_cast<int>(future_steps_.size()) * (2 * action_dim_ + 6)) {
-+            throw std::runtime_error("WBTPolicy: command_multi_future dim != |future_steps| * (2J + 6)");
++        const auto name = seg["name"].as<std::string>();
++        const int expected = name == "ref_root_pos_future_local"
++            ? static_cast<int>(future_steps_.size()) * 3
++            : name == "ref_root_ori_future_b"
++                ? static_cast<int>(future_steps_.size()) * 6
++                : name == "ref_joint_pos_future"
++                    ? static_cast<int>(future_steps_.size()) * action_dim_
++                    : seg["dim"].as<int>();
++        if (seg["dim"].as<int>() != expected) {
++            throw std::runtime_error("WBTPolicy: observation dimension mismatch for '" + name + "'");
 +        }
 +    }
 +
@@ -924,8 +1125,10 @@ index 0000000..9a41cfa
 +    // (training starts from RSI, so robot and reference headings coincide at
 +    // t=0; the real robot's IMU yaw is arbitrary).  Identity when they already
 +    // coincide, e.g. in the sim prototype.
-+    const Eigen::Quaternionf robot_yaw = isaaclab::yawQuaternion(torso_quat_w(env_->robot->data));
-+    const Eigen::Quaternionf ref_yaw   = isaaclab::yawQuaternion(motion_->anchor_quat(frame_));
++    const Eigen::Quaternionf anchor_quat = anchor_is_pelvis_
++        ? env_->robot->data.root_quat_w : torso_quat_w(env_->robot->data);
++    const Eigen::Quaternionf robot_yaw = projected_yaw_quat(anchor_quat);
++    const Eigen::Quaternionf ref_yaw   = projected_yaw_quat(motion_->anchor_quat(frame_));
 +    init_quat_ = robot_yaw * ref_yaw.conjugate();
 +
 +    env_->episode_length = 0;
