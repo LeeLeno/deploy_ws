@@ -70,7 +70,15 @@ def run_episode(proto, cfg, motion, session, model, data, ids, start_frame, step
 
     assembler = proto.ObsAssembler(cfg)
     default = np.asarray(cfg["default_angles"], dtype=np.float32)
-    scale, ema = float(cfg["action_scale"]), float(cfg.get("ema_alpha", 1.0))
+    scale_cfg = cfg["action_scale"]
+    scale = np.asarray(scale_cfg if isinstance(scale_cfg, list) else [scale_cfg] * int(cfg["action_dim"]), dtype=np.float32)
+    if scale.shape != (int(cfg["action_dim"]),):
+        raise SystemExit("action_scale must be scalar or action_dim-sized list")
+    clip_cfg = cfg.get("final_target_clip")
+    final_clip = None if clip_cfg is None else np.asarray(clip_cfg, dtype=np.float32)
+    if final_clip is not None and final_clip.shape != (int(cfg["action_dim"]), 2):
+        raise SystemExit("final_target_clip must have shape [action_dim, 2]")
+    ema = float(cfg.get("ema_alpha", 1.0))
     substeps = max(1, int(round(float(cfg["ctrl_dt"]) / float(model.opt.timestep))))
     in_name, out_name = session.get_inputs()[0].name, session.get_outputs()[0].name
     last_action = np.zeros(int(cfg["action_dim"]), dtype=np.float32)
@@ -94,7 +102,10 @@ def run_episode(proto, cfg, motion, session, model, data, ids, start_frame, step
         if not np.all(np.isfinite(action)):
             raise SystemExit(f"non-finite action at frame {frame}")
         last_action = action
-        q_target = ema * (action * scale + default) + (1.0 - ema) * q_target
+        new_target = action * scale + default
+        if final_clip is not None:
+            new_target = np.clip(new_target, final_clip[:, 0], final_clip[:, 1])
+        q_target = ema * new_target + (1.0 - ema) * q_target
         refs.append(np.concatenate([obs, action, q_target]).astype(np.float32))
 
         data.ctrl[:] = q_target
@@ -113,7 +124,7 @@ def main() -> None:
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--unilab", type=Path, default=UNILAB)
     parser.add_argument("--config", type=Path,
-                        default=DEPLOY_WS / "assets/sonicmimic_dr_140k_deploy_config.yaml")
+                        default=DEPLOY_WS / "assets/sonicmimic_dr_ankle_limit_140k_deploy_config.yaml")
     parser.add_argument("--onnx", type=Path, default=DEPLOY_WS / "assets/policy.onnx")
     parser.add_argument("--motion", type=Path,
                         default=DEPLOY_WS / "assets/dance1_subject2_part.npz")

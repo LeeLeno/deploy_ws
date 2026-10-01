@@ -28,5 +28,5 @@ g++ -std=c++17 -O2 \
     -o "$OUT/wbt_parity"
 
 LD_LIBRARY_PATH="$OUT/lib" "$OUT/wbt_parity" \
-    "$WS/assets/sonicmimic_dr_140k_deploy_config.yaml" "$G1/config/config.yaml" \
+    "$WS/assets/sonicmimic_dr_ankle_limit_140k_deploy_config.yaml" "$G1/config/config.yaml" \
     "$WS/assets/policy.onnx" "$WS/assets/dance1_subject2_part.bin" "$OUT" Mimic_WBT_Dance1

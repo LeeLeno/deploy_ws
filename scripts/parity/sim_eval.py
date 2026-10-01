@@ -122,6 +122,14 @@ class Evaluator:
             self.vel_stance[int(motor)] = vel["default_joint_pos"][i]   # policy order -> SDK order
         self.substeps = int(round(float(self.cfg["ctrl_dt"]) / float(m.opt.timestep)))
         self.default = np.asarray(self.cfg["default_angles"], np.float32)
+        scale_cfg = self.cfg["action_scale"]
+        self.scale = np.asarray(scale_cfg if isinstance(scale_cfg, list) else [scale_cfg] * len(self.default), np.float32)
+        if self.scale.shape != self.default.shape:
+            raise ValueError("action_scale must be scalar or action_dim-sized list")
+        clip_cfg = self.cfg.get("final_target_clip")
+        self.final_clip = None if clip_cfg is None else np.asarray(clip_cfg, np.float32)
+        if self.final_clip is not None and self.final_clip.shape != (len(self.default), 2):
+            raise ValueError("final_target_clip must have shape [action_dim, 2]")
         self.lower = np.asarray(self.cfg["joint_lower"], np.float32)
         self.upper = np.asarray(self.cfg["joint_upper"], np.float32)
         self.anchor_idx = int(self.cfg["anchor_body_idx_in_motion"])
@@ -208,7 +216,9 @@ class Evaluator:
             obs = assembler.push(seg)
             action = np.asarray(self.session.run([self.out_name], {self.in_name: obs[None]})[0][0], np.float32)
             last_action = action
-            new_target = (action * float(self.cfg["action_scale"]) + self.default).astype(np.float32)
+            new_target = (action * self.scale + self.default).astype(np.float32)
+            if self.final_clip is not None:
+                new_target = np.clip(new_target, self.final_clip[:, 0], self.final_clip[:, 1])
             refs.append(np.concatenate([obs, action, new_target]))
 
             # metrics / safety counters
@@ -297,7 +307,7 @@ SCENARIOS = [
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--unilab", type=Path, default=UNILAB)
-    p.add_argument("--config", type=Path, default=DEPLOY_WS / "assets/sonicmimic_dr_140k_deploy_config.yaml")
+    p.add_argument("--config", type=Path, default=DEPLOY_WS / "assets/sonicmimic_dr_ankle_limit_140k_deploy_config.yaml")
     p.add_argument("--onnx", type=Path, default=DEPLOY_WS / "assets/policy.onnx")
     p.add_argument("--motion", type=Path, default=DEPLOY_WS / "assets/dance1_subject2_part.npz")
     p.add_argument("--meshdir", type=Path, default=None)
