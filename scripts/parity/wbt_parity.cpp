@@ -2,8 +2,8 @@
 //
 // OFFLINE numerical parity test: State_WBT's computational core (WBTPolicy,
 // the real ObservationManager / ActionManager / OrtRunner and
-// unitree::BaseArticulation::update) vs scripts/parity/sim_reference.py
-// (UniLab tmp/sim_prototype.py), fed the same sensor trace.
+// unitree::BaseArticulation::update) vs scripts/parity/mimiclite_reference.py
+// (NumPy port of the UniLab MimicLite actor terms), fed the same sensor trace.
 //
 // THIS PROGRAM DOES NOT TOUCH DDS, MOTORS, OR ANY ROBOT INTERFACE: the
 // articulation reads a plain struct that mimics the unitree_hg LowState_

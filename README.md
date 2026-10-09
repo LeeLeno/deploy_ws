@@ -23,7 +23,7 @@ deploy_ws/
 │   ├── setup.sh                 # fetch upstream + apply patches + arch overlay
 │   ├── export_motion_bin.py     # training NPZ → State_WBT motion .bin
 │   ├── setup_host_deps.sh       # rootless libfmt for the g1_ctrl build
-│   └── parity/                  # offline parity / closed-loop sim / Velocity gate tests (no DDS)
+│   └── parity/                  # offline parity / numeric / Velocity gate tests (no DDS)
 ├── unitree_mujoco/         # cloned by setup.sh at a pinned SHA
 ├── unitree_rl_lab/         # cloned by setup.sh at a pinned SHA
 └── unitree_sdk2/           # cloned by setup.sh at a pinned SHA
@@ -85,7 +85,7 @@ assets/mimiclite_dr_*_deploy_config.yaml         # must match training
 Paths and PD gains (`kp`/`kd`, = training MJCF actuator gains) live in
 `config/config.yaml` → `Mimic_WBT_Dance1`.  No rebuild needed; `g1_ctrl` loads
 them at start-up (State_WBT constructor).  Before any robot run, verify offline:
-`PYTHON=<py with mujoco+onnxruntime>=1.18> MESHDIR=<g1 meshes> scripts/parity/run_parity.sh`
+`PYTHON=<py with onnxruntime>=1.18> [UNILAB=<UniLab checkout>] scripts/parity/run_parity.sh`
 must print `PARITY PASS`.
 
 ## First-time build
@@ -176,14 +176,14 @@ See upstream `unitree_rl_lab/README.md` → "Deploy → Sim2Sim". Our
 `unitree_mujoco-g1-scene.patch` already flips `simulate/config.yaml` to `g1` /
 `scene_29dof.xml`.
 
-  cd /home/unitree/ws/sonicmimic_dr/deploy_ws/unitree_rl_lab/deploy/robots/g1_29dof/build
+  cd <deploy_ws>/unitree_rl_lab/deploy/robots/g1_29dof/build
   chmod u+x g1_ctrl                 # 我之前去掉了执行权限防误启动，这一步解除
   ./g1_ctrl --network eth0 --log    # --log 会写日志到 g1_29dof/log/log.txt
   
 
   启动命令：
 
-  cd /home/unitree/ws/sonicmimic_dr/deploy_ws/unitree_rl_lab/deploy/robots/g1_29dof/build
+  cd <deploy_ws>/unitree_rl_lab/deploy/robots/g1_29dof/build
   chmod u+x g1_ctrl
   ./g1_ctrl --network <实际网卡名> --log
 
