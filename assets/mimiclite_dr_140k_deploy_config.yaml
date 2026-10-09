@@ -12,6 +12,7 @@ action_scale: 2.0
 simulate_action_latency: true
 anchor_body_name: pelvis
 root_body_idx_in_motion: 1   # NPZ column 0 is the world body; pelvis is column 1
+anchor_body_idx_in_motion: 1 # anchor = pelvis -> same NPZ column as root
 future_steps: [-8, -4, -2, 0, 1, 2, 3, 4]
 # Flatten order must match the training ObservationManager group order exactly
 # (run_config.json env.observations.actor.terms, null terms skipped).

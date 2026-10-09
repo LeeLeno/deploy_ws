@@ -167,18 +167,9 @@ index 23f280d..a2807db 100644
 \ No newline at end of file
 +};
 diff --git a/deploy/include/isaaclab/envs/mdp/observations/observations.h b/deploy/include/isaaclab/envs/mdp/observations/observations.h
-index 978a918..a9e0f3d 100644
+index 978a918..f8479ec 100644
 --- a/deploy/include/isaaclab/envs/mdp/observations/observations.h
 +++ b/deploy/include/isaaclab/envs/mdp/observations/observations.h
-@@ -13,7 +13,7 @@ namespace mdp
- REGISTER_OBSERVATION(base_ang_vel)
- {
-     auto & asset = env->robot;
--    auto & data = asset->data.root_ang_vel_b;
-+    auto & data = asset->data.torso_ang_vel_b;
-     return std::vector<float>(data.data(), data.data() + data.size());
- }
- 
 @@ -137,4 +137,4 @@ REGISTER_OBSERVATION(gait_phase)
  }
  
@@ -187,27 +178,30 @@ index 978a918..a9e0f3d 100644
 \ No newline at end of file
 +}
 diff --git a/deploy/include/unitree_articulation.h b/deploy/include/unitree_articulation.h
-index 40b7572..5986f60 100644
+index 40b7572..c6ce7bf 100644
 --- a/deploy/include/unitree_articulation.h
 +++ b/deploy/include/unitree_articulation.h
-@@ -38,9 +38,24 @@ public:
+@@ -38,9 +38,27 @@ public:
              data.joint_pos[i] = lowstate->msg_.motor_state()[data.joint_ids_map[i]].q();
              data.joint_vel[i] = lowstate->msg_.motor_state()[data.joint_ids_map[i]].dq();
          }
 +        // Reconstruct the MuJoCo `torso_gyro` sensor used by the MimicLite
-+        // actor.  The low-state IMU is at the pelvis; waist joints 12/13/14
-+        // are yaw/roll/pitch in the training and SDK order.
-+        const Eigen::AngleAxisf yaw(data.joint_pos[12], Eigen::Vector3f::UnitZ());
-+        const Eigen::AngleAxisf roll(data.joint_pos[13], Eigen::Vector3f::UnitX());
-+        const Eigen::AngleAxisf pitch(data.joint_pos[14], Eigen::Vector3f::UnitY());
++        // actor.  The low-state IMU is at the pelvis; SDK motors 12/13/14 are
++        // waist yaw/roll/pitch.  Read them by motor index: data.joint_pos is in
++        // the policy's order (joint_ids_map), which is not SDK order for
++        // IsaacLab policies.
++        const auto& ms = lowstate->msg_.motor_state();
++        const Eigen::AngleAxisf yaw(ms[12].q(), Eigen::Vector3f::UnitZ());
++        const Eigen::AngleAxisf roll(ms[13].q(), Eigen::Vector3f::UnitX());
++        const Eigen::AngleAxisf pitch(ms[14].q(), Eigen::Vector3f::UnitY());
 +        const Eigen::Matrix3f R_p = data.root_quat_w.toRotationMatrix();
 +        const Eigen::Matrix3f R_y = yaw.toRotationMatrix();
 +        const Eigen::Matrix3f R_r = roll.toRotationMatrix();
 +        const Eigen::Matrix3f R_t = R_p * R_y * R_r * pitch.toRotationMatrix();
 +        const Eigen::Vector3f omega_b = data.root_ang_vel_b
-+            + Eigen::Vector3f(0.0f, 0.0f, data.joint_vel[12])
-+            + R_y * Eigen::Vector3f(data.joint_vel[13], 0.0f, 0.0f)
-+            + R_y * R_r * Eigen::Vector3f(0.0f, data.joint_vel[14], 0.0f);
++            + Eigen::Vector3f(0.0f, 0.0f, ms[12].dq())
++            + R_y * Eigen::Vector3f(ms[13].dq(), 0.0f, 0.0f)
++            + R_y * R_r * Eigen::Vector3f(0.0f, ms[14].dq(), 0.0f);
 +        data.torso_ang_vel_b = R_t.transpose() * (R_p * omega_b);
      }
  
@@ -731,10 +725,10 @@ index 0000000..b8a57c4
 +}
 diff --git a/deploy/robots/g1_29dof/src/WBT_Policy.cpp b/deploy/robots/g1_29dof/src/WBT_Policy.cpp
 new file mode 100644
-index 0000000..0d226fd
+index 0000000..add02c8
 --- /dev/null
 +++ b/deploy/robots/g1_29dof/src/WBT_Policy.cpp
-@@ -0,0 +1,445 @@
+@@ -0,0 +1,451 @@
 +// SPDX-FileCopyrightText: 2026 deploy_ws (parallel WBT chain).
 +#include "WBT_Policy.h"
 +
@@ -840,6 +834,13 @@ index 0000000..0d226fd
 +
 +namespace isaaclab { namespace mdp {
 +
++// MimicLite's `base_ang_vel` is the MuJoCo torso gyro; the upstream
++// `base_ang_vel` (pelvis IMU) stays untouched for the IsaacLab policies.
++REGISTER_OBSERVATION(wbt_torso_ang_vel)
++{
++    const auto& data = env->robot->data.torso_ang_vel_b;
++    return std::vector<float>(data.data(), data.data() + data.size());
++}
 +REGISTER_OBSERVATION(wbt_ref_root_pos_future_local)
 +{
 +    if (!WBTPolicy::active) {
@@ -885,11 +886,7 @@ index 0000000..0d226fd
 +    if (x.head<2>().norm() > 0.1f) {
 +        heading = x.head<2>();
 +    } else {
-+        if (x.z() < 0.0f) {
-+            heading = z.head<2>();
-+        } else {
-+            heading = -z.head<2>();
-+        }
++        if (x.z() < 0.0f) { heading = z.head<2>(); } else { heading = -z.head<2>(); }
 +    }
 +    return Eigen::Quaternionf(Eigen::AngleAxisf(std::atan2(heading.y(), heading.x()),
 +                                                 Eigen::Vector3f::UnitZ()));
@@ -911,9 +908,12 @@ index 0000000..0d226fd
 +    // No global root-position sensor exists on the G1 low state.  The
 +    // deployment reference is therefore anchored at the current clip root;
 +    // future displacements retain the training term's local-frame semantics.
++    // Displacements are clip-frame vectors: rotate them by init_quat_ into the
++    // robot's world (as ref_root_ori_future_b does for orientations) before
++    // projecting onto the robot's yaw.
 +    for (const int step : future_steps_) {
 +        const auto p = motion_->root_pos(clamp_motion_frame(frame_, step, last));
-+        const auto local = root_yaw.conjugate() * (p - current_ref);
++        const Eigen::Vector3f local = root_yaw.conjugate() * (init_quat_ * (p - current_ref));
 +        out.insert(out.end(), local.data(), local.data() + 3);
 +    }
 +    return out;
@@ -985,7 +985,7 @@ index 0000000..0d226fd
 +    // insertion order; ObservationManager concatenates in that order).
 +    // UniLab actor term -> framework registrar.
 +    static const std::map<std::string, std::string> alias = {
-+        {"base_ang_vel",         "base_ang_vel"},              // IMU gyroscope
++        {"base_ang_vel",         "wbt_torso_ang_vel"},         // torso gyro (pelvis IMU + waist rates)
 +        {"joint_pos",            "joint_pos"},                 // raw q (MimicLite)
 +        {"joint_vel",            "joint_vel_rel"},             // raw dq
 +        {"last_action",          "last_action"},
