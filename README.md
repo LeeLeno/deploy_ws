@@ -18,7 +18,7 @@ deploy_ws/
 │   └── mimiclite_dr_140k_deploy_config.yaml     #   obs_layout, future_steps, default_angles, latency
 ├── patches/                # diffs against pinned upstream
 │   ├── unitree_mujoco-g1-scene.patch    # sim2sim: default scene → G1
-│   └── unitree_rl_lab-wbt-fsm.patch     # adds State_WBT to g1_ctrl FSM
+│   └── unitree_rl_lab-wbt-fsm.patch     # adds State_WBT to g1_ctrl FSM + --network NIC check
 ├── scripts/
 │   ├── setup.sh                 # fetch upstream + apply patches + arch overlay
 │   ├── export_motion_bin.py     # training NPZ → State_WBT motion .bin
@@ -35,7 +35,7 @@ Robot on a safety rig, human on the controller, NIC wired to the G1.
 
 ```bash
 cd ~/lxf/deploy_ws/unitree_rl_lab/deploy/robots/g1_29dof/build
-./g1_ctrl --network enP8p1s0     # Jetson Orin NX NIC; use `ip -br link` to find yours
+./g1_ctrl --network eth0         # G1 onboard Orin NX: eth0 = 192.168.123.164; check with `ip -br addr`
 ```
 
 Controller transitions (trigger names match `config/config.yaml` — `LT` is L2,
@@ -190,3 +190,92 @@ See upstream `unitree_rl_lab/README.md` → "Deploy → Sim2Sim". Our
   例如网卡是 eth0 时：
 
   ./g1_ctrl --network eth0 --log
+
+
+
+  cd /home/unitree/ws/mimiclite_dr/deploy_ws/unitree_rl_lab/deploy/robots/g1_29dof/build
+  ./g1_ctrl --network eth0 --check-network   # 只检查网卡，不初始化 DDS、不发 lowcmd
+  ./g1_ctrl --network eth0 --log
+  - 机载 Orin NX 上连 G1 的网卡是 eth0（192.168.123.164）。enP8p1s0 是别的 Jetson 载板上的名字，这台机器上没有这张卡。不确定时用 ip -br addr 找 192.168.123.x 那张。
+  - --log 会把日志追加写到 g1_29dof/log/log.txt。
+  - g1_ctrl 已经有执行权限，不需要 chmod。
+  - 机器人要挂在保护架上，并且有人手握遥控器。
+
+  遥控器顺序（LT = L2，RB = R1）
+
+  ┌──────────┬──────────────────────────────────────────────────────┬──────────────────────────────┐
+  │ 当前状态 │                         按键                         │             进入             │
+  ├──────────┼──────────────────────────────────────────────────────┼──────────────────────────────┤
+  │ 启动后   │ —                                                    │ Passive（阻尼，关节是软的）  │
+  ├──────────┼──────────────────────────────────────────────────────┼──────────────────────────────┤
+  │ Passive  │ LT + 上                                              │ FixStand（约 3 s 插值站起）  │
+  ├──────────┼──────────────────────────────────────────────────────┼──────────────────────────────┤
+  │ FixStand │ RB + X                                               │ Velocity（RL 站立平衡）      │
+  ├──────────┼──────────────────────────────────────────────────────┼──────────────────────────────┤
+  │ Velocity │ 按住 LT 不放 ≥2 s，再按 右                           │ Mimic_WBT_Dance1（开始跳舞） │
+  ├──────────┼──────────────────────────────────────────────────────┼──────────────────────────────┤
+  │ 跳舞中   │ 跳完约 17.4 s 自动切换，或手动按 RB + X              │ Velocity                     │
+  ├──────────┼──────────────────────────────────────────────────────┼──────────────────────────────┤
+  │ 任意状态 │ LT + B                                               │ Passive（急停）              │
+  ├──────────┼──────────────────────────────────────────────────────┼──────────────────────────────┤
+  │ 结束     │ Velocity 下按 LT + B 进入 Passive，再在终端按 Ctrl+C │ —                            │
+  └──────────┴──────────────────────────────────────────────────────┴──────────────────────────────┘
+
+  - 在 Velocity 状态下，LT(2s) + 下 和 LT(2s) + 左 会进入 Unitree 自带的舞蹈，别按错方向。
+  - 跳舞时如果姿态倾倒，或者策略输出非法值（NaN 等），会自动进入 Passive。
+
+  加载的文件
+
+  全部在启动时读入一次。改 yaml、onnx 或 bin 后只需要重启 g1_ctrl，不用重新编译。
+
+  1. unitree_rl_lab/deploy/robots/g1_29dof/config/config.yaml：状态机和按键定义，以及 Mimic_WBT_Dance1 的 kp/kd、下面三个文件的路径、time_start: 0。
+  2. assets/mimiclite_dr_140k_deploy_config.yaml：397 维 obs 的布局、action_scale 2.0、一步动作延迟、default_angles、参考帧偏移 [-8,-4,-2,0,1,2,3,4]。
+  3. assets/policy.onnx 加 policy.onnx.data（权重）。
+  4. assets/dance1_subject2_part.bin：870 帧，50 fps。
+
+  舞蹈前后的 Velocity 用的是 Unitree 自带策略 config/policy/velocity/v0。
+
+  数据流（每 20 ms 一步）
+
+  LowState：骨盆 IMU 四元数 + 陀螺仪，29 个关节的 q / dq
+   → 拼成 397 维 obs：
+       上一步动作 29 | 参考根位移 24 | 参考根朝向 48 | 参考关节角 232
+       （参考取当前帧的 −8, −4, −2, 0, +1, +2, +3, +4 帧）
+       | 躯干角速度 3（IMU 陀螺仪 + 腰部关节速度推算）| 重力投影 3 | 原始 q 29 | 原始 dq 29
+   → policy.onnx → 动作 a（29 维，tanh 输出，范围 ±1）
+   → 目标角 = 上一步的 a × 2.0 + default_angles（延迟一步，不裁剪）
+   → LowCmd 发给电机，电机端做 PD（kp/kd 来自 config.yaml）
+   → 参考帧 +1；播到最后一帧后回到 Velocity
+
+  进入跳舞时，参考动作的朝向会对齐到机器人当前的朝向，起点对齐到机器人当前的位置。所以不用把机器人摆到特定方向，但舞蹈会移动，周围要留出空间。
+
+## 新手从零编译运行（最小步骤）
+
+在 G1 机载 Orin NX（Ubuntu 20.04，aarch64）上执行，需要能上网（要 clone GitHub，aarch64 还要下载 onnxruntime）。
+
+```bash
+# 1. 系统依赖
+sudo apt update
+sudo apt install -y build-essential cmake git curl file \
+    libyaml-cpp-dev libboost-program-options-dev libeigen3-dev libspdlog-dev libfmt-dev
+
+# 2. 拉取本仓库，再拉 pinned 上游并打 patch
+git clone -b feat/mimiclite-obs-deploy https://github.com/LeeLeno/deploy_ws.git
+cd deploy_ws
+./scripts/setup.sh
+
+# 3. 安装 unitree_sdk2 自带的 CycloneDDS（g1_ctrl 编译和运行都要用 /usr/local 下的 libddsc）
+cd unitree_sdk2 && mkdir -p build && cd build
+cmake .. -DBUILD_EXAMPLES=OFF && sudo make install && sudo ldconfig
+cd ../..
+
+# 4. 编译 g1_ctrl（只编译，不会启动）
+cd unitree_rl_lab/deploy/robots/g1_29dof && mkdir -p build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release && make -j$(nproc)
+
+# 5. 运行（机器人挂在保护架上，有人手握遥控器）
+./g1_ctrl --network eth0 --check-network   # 只检查网卡就退出，不初始化 DDS；名字不对会列出可用网卡，192.168.123.x 那张就是 G1
+./g1_ctrl --network eth0 --log
+```
+
+遥控器操作见上面的「遥控器顺序」。之后改了 `assets/` 或 `config.yaml`，只需要重启 g1_ctrl，不用重新编译。
