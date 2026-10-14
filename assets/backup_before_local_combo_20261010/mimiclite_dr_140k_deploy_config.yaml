@@ -1,0 +1,33 @@
+# Deployment contract for UniLab ``feat/mimiclite-obs``
+# ``warpsac/task/g1_motion_tracking/mjwarp_mimiclite_dr.yaml`` at
+# ``G1MotionTrackingSAC/2026-09-30_14-53-45_mjwarp/model_140000.pt``.
+# ``policy.onnx`` is the deterministic WarpSAC actor exported from that exact
+# checkpoint; ``policy.onnx.data`` contains its external weights.
+obs_dim: 397
+action_dim: 29
+ctrl_dt: 0.02
+action_scale: 2.0
+# MotionJointPositionActionCfg delays the physical target by one control step.
+# The actor still receives the previous raw policy action in ``last_action``.
+simulate_action_latency: true
+anchor_body_name: pelvis
+root_body_idx_in_motion: 1   # NPZ column 0 is the world body; pelvis is column 1
+anchor_body_idx_in_motion: 1 # anchor = pelvis -> same NPZ column as root
+future_steps: [-8, -4, -2, 0, 1, 2, 3, 4]
+# Flatten order must match the training ObservationManager group order exactly
+# (run_config.json env.observations.actor.terms, null terms skipped).
+obs_layout:
+  - {name: last_action, dim: 29}
+  - {name: ref_root_pos_future_local, dim: 24}
+  - {name: ref_root_ori_future_b, dim: 48}
+  - {name: ref_joint_pos_future, dim: 232}
+  - {name: base_ang_vel, dim: 3}
+  - {name: projected_gravity, dim: 3}
+  - {name: joint_pos, dim: 29}
+  - {name: joint_vel, dim: 29}
+# The training actor uses raw joint positions and velocities.  ``joint_pos``
+# is not offset by the static default pose; the default pose is applied only
+# when converting the action into a physical target.
+default_angles: [-0.312, 0.0, 0.0, 0.669, -0.363, 0.0, -0.312, 0.0, 0.0, 0.669, -0.363, 0.0, 0.0, 0.0, 0.0, 0.2, 0.2, 0.0, 0.6, 0.0, 0.0, 0.0, 0.2, -0.2, 0.0, 0.6, 0.0, 0.0, 0.0]
+joint_lower: [-2.5307, -0.5236, -2.7576, -0.087267, -0.87267, -0.2618, -2.5307, -2.9671, -2.7576, -0.087267, -0.87267, -0.2618, -2.618, -0.52, -0.52, -3.0892, -1.5882, -2.618, -1.0472, -1.97222, -1.61443, -1.61443, -3.0892, -2.2515, -2.618, -1.0472, -1.97222, -1.61443, -1.61443]
+joint_upper: [2.8798, 2.9671, 2.7576, 2.8798, 0.5236, 0.2618, 2.8798, 0.5236, 2.7576, 2.8798, 0.5236, 0.2618, 2.618, 0.52, 0.52, 2.6704, 2.2515, 2.618, 2.0944, 1.97222, 1.61443, 1.61443, 2.6704, 1.5882, 2.618, 2.0944, 1.97222, 1.61443, 1.61443]

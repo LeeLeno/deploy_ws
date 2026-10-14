@@ -279,3 +279,22 @@ cmake .. -DCMAKE_BUILD_TYPE=Release && make -j$(nproc)
 ```
 
 遥控器操作见上面的「遥控器顺序」。之后改了 `assets/` 或 `config.yaml`，只需要重启 g1_ctrl，不用重新编译。
+
+
+
+
+ ssh unitree@192.168.110.18
+
+  cd /home/unitree/ws/mimiclite_dr/deploy_ws/unitree_rl_lab/deploy/robots/g1_29dof/build
+  ./g1_ctrl --network eth0 --log
+
+  手柄操作：
+
+  1. 启动后为 Passive
+  2. LT + 上：进入 FixStand
+  3. RB + X：进入 Velocity
+  4. 在 Velocity 中，按住 LT ≥2 秒，再按方向键“右”：启动新的 dance
+  5. 约 17.4 秒后自动回到 Velocity
+  6. 手动退出：RB + X
+  7. 紧急停止：任意状态按 LT + B，回到 Passive
+  8. 结束后确认处于 Passive，终端按 Ctrl+C

@@ -158,10 +158,21 @@ def run_episode(cfg, motion, sess, start, steps, yaw_offset, root_col, torso_col
     qz = yaw_quat(yaw_offset)
     Rz = qmat(qz)
     in_name, out_name = sess.get_inputs()[0].name, sess.get_outputs()[0].name
-    prev_action = np.zeros(J, np.float32)
+    handoff_steps = int(np.ceil(float(cfg.get("handoff_duration_s", 0.0)) /
+                         float(cfg["ctrl_dt"])))
+    entry_q = motion["joint_pos"][start].astype(np.float32)
+    entry_dq = motion["joint_vel"][start].astype(np.float32)
+    goal_q = entry_q.copy()
+    goal_dq = entry_dq.copy()
+    prev_action = ((entry_q.astype(float) - default) / scale).astype(np.float32)
+    if handoff_steps == 0:
+        prev_action.fill(0.0)
     sensors, rows = [], []
     for k in range(steps):
-        f = start + k
+        # The hand-off holds the selected motion frame; the clip clock starts
+        # advancing only after the transition has completed.
+        f = start + max(0, k - handoff_steps)
+        f = min(f, last)
         # sensors the G1 provides, as float32 (what C++ receives)
         imu_q = qmul(qz, motion["body_quat_w"][f, root_col].astype(float)).astype(np.float32)
         gyro = body_gyro(motion, f, root_col).astype(np.float32)
@@ -193,15 +204,31 @@ def run_episode(cfg, motion, sess, start, steps, yaw_offset, root_col, torso_col
             "joint_vel": dq.astype(float),
         }
         obs = np.concatenate([segs[s["name"]] for s in cfg["obs_layout"]]).astype(np.float32)
-        action = sess.run([out_name], {in_name: obs[None]})[0][0].astype(np.float32)
-        q_target = (prev_action * scale + default).astype(np.float32)   # one-step latency
+        if k < handoff_steps:
+            # Match WBTPolicy's minimum-jerk pre-positioning.  No actor
+            # inference is consumed before the measured state reaches the
+            # selected NPZ frame; its first inference happens at frame start.
+            T = float(handoff_steps) * float(cfg["ctrl_dt"])
+            t = min(T, float(k + 1) * float(cfg["ctrl_dt"]))
+            s = np.clip(t / T, 0.0, 1.0) if T > 0.0 else 1.0
+            s2, s3, s4, s5 = s*s, s*s*s, s*s*s*s, s*s*s*s*s
+            h00 = 1.0 - 10.0*s3 + 15.0*s4 - 6.0*s5
+            h10 = s - 6.0*s3 + 8.0*s4 - 3.0*s5
+            h01 = 10.0*s3 - 15.0*s4 + 6.0*s5
+            h11 = -4.0*s3 + 7.0*s4 - 3.0*s5
+            q_target = (h00 * entry_q + h10 * T * entry_dq
+                        + h01 * goal_q + h11 * T * goal_dq).astype(np.float32)
+            action = ((q_target.astype(float) - default) / scale).astype(np.float32)
+        else:
+            action = sess.run([out_name], {in_name: obs[None]})[0][0].astype(np.float32)
+            q_target = (prev_action * scale + default).astype(np.float32)   # one-step latency
         rows.append(np.concatenate([obs, action, q_target]))
 
         # contrast: the pre-fix deploy formula (displacement not rotated into the robot world)
         old = (qmat(robot_yaw).T @ (motion["body_pos_w"][fs, root_col].astype(float)
                                     - motion["body_pos_w"][f, root_col].astype(float)).T).T.reshape(-1)
         stats["old_pos_err"] = max(stats.get("old_pos_err", 0.0), float(np.abs(old - root_pos_local).max()))
-        if abs(yaw_offset) > 1e-6:
+        if abs(yaw_offset) > 1e-6 and k >= handoff_steps:
             obs_old = obs.copy()
             off = 0
             for s in cfg["obs_layout"]:
@@ -211,7 +238,7 @@ def run_episode(cfg, motion, sess, start, steps, yaw_offset, root_col, torso_col
             a_old = sess.run([out_name], {in_name: obs_old[None]})[0][0]
             stats["old_act_err"] = max(stats.get("old_act_err", 0.0), float(np.abs(a_old - action).max()))
         stats.setdefault("actions", []).append(action)
-        stats.setdefault("targets_next", []).append(action * scale + default)
+        stats.setdefault("targets_next", []).append(q_target)
         stats.setdefault("ref_q", []).append(q)
         stats.setdefault("gyro_rec_err", []).append(
             np.abs(torso_gyro_reconstructed(gyro.astype(float), q.astype(float), dq.astype(float)) - torso_gyro).max())

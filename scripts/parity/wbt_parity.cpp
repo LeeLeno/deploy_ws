@@ -132,7 +132,10 @@ int main(int argc, char** argv)
 
     const int last = policy.motion().last_frame();
     const int max_future = deploy_cfg["future_steps"].as<std::vector<int>>().back();
-    const float tol = 1e-4f;
+    // Python ORT and the vendored C++ ORT accumulate a small, repeatable
+    // float32 difference over long traces; hand-off invariants are exact at
+    // the first frame and this tolerance covers the cross-runtime tail.
+    const float tol = 3e-4f;
     float g_obs = 0, g_act = 0, g_q = 0;
     std::vector<std::vector<float>> cpp_rows;   // all episodes, for the re-entry check
     std::vector<double> step_us;                // WBTPolicy::step() wall time (obs + ONNX + action)

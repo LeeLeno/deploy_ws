@@ -53,23 +53,19 @@ int main(int argc, char** argv)
             actions.push_back(a);
         }
 
-        // The first physical target after reset is the default pose because
-        // the configured one-step latency uses the previous zero action.
-        const float defaults[29] = {
-            -0.312f, 0.0f, 0.0f, 0.669f, -0.363f, 0.0f,
-            -0.312f, 0.0f, 0.0f, 0.669f, -0.363f, 0.0f,
-            0.0f, 0.0f, 0.0f, 0.2f, 0.2f, 0.0f, 0.6f, 0.0f,
-            0.0f, 0.0f, 0.2f, -0.2f, 0.0f, 0.6f, 0.0f, 0.0f, 0.0f,
-        };
-        for (int i = 0; i < 29; ++i) {
-            const float first_target = defaults[i];
-            const float second_target = actions[0][i] * 2.0f + defaults[i];
-            if (!std::isfinite(first_target) || !std::isfinite(second_target)) {
-                throw std::runtime_error("non-finite delayed target");
+        // The raw ONNX output remains finite/deterministic.  The deployed WBT
+        // controller now seeds its one-step latency slot from measured q at a
+        // state hand-off; this standalone actor check deliberately does not
+        // instantiate a robot or apply that transition.
+        for (const auto& action : actions) {
+            if (!std::all_of(action.begin(), action.end(), [](float x) {
+                    return std::isfinite(x) && std::fabs(x) <= 1.0001f;
+                })) {
+                throw std::runtime_error("actor output is outside finite tanh range");
             }
         }
         std::printf("NUMERIC PASS — vendored ONNX obs[1,397] -> action[1,29], "
-                    "3 finite deterministic probes; one-step reset target is default pose\n");
+                    "3 finite deterministic probes; hand-off logic is checked by wbt_parity\n");
         return 0;
     } catch (const std::exception& e) {
         std::fprintf(stderr, "NUMERIC FAIL: %s\n", e.what());

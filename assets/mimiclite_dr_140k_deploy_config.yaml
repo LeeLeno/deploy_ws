@@ -1,12 +1,15 @@
-# Deployment contract for UniLab ``feat/mimiclite-obs``
-# ``warpsac/task/g1_motion_tracking/mjwarp_mimiclite_dr.yaml`` at
-# ``G1MotionTrackingSAC/2026-09-30_14-53-45_mjwarp/model_140000.pt``.
-# ``policy.onnx`` is the deterministic WarpSAC actor exported from that exact
+# Deployment contract for UniLab FlashSAC universal-combo dance 60k
+# Source checkpoint: runs/local_combo_dance_60k_s1/model_60000.pt
+# Exported actor: runs/local_combo_dance_60k_s1/policy.onnx (+ policy.onnx.data)
+# Training commit: c03acf0b (rebased on b1d624e9); observation/action contract unchanged.
 # checkpoint; ``policy.onnx.data`` contains its external weights.
 obs_dim: 397
 action_dim: 29
 ctrl_dt: 0.02
 action_scale: 2.0
+# Safe Velocity -> WBT hand-off.  During this period the motion phase is held
+# at the selected start frame while the target is blended from measured q.
+handoff_duration_s: 0.8
 # MotionJointPositionActionCfg delays the physical target by one control step.
 # The actor still receives the previous raw policy action in ``last_action``.
 simulate_action_latency: true
