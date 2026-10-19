@@ -1,4 +1,4 @@
-# FlashMimic mjwarp_fast model_17500; feedforward already embedded in ONNX.
+# FlashMimic mjwarp_fast 60k (run 2026-10-15_17-16-22, latest DR/noise); feedforward embedded in ONNX.
 obs_dim: 397
 action_dim: 29
 ctrl_dt: 0.02
@@ -124,6 +124,6 @@ joint_upper:
 - 1.97222
 - 1.61443
 - 1.61443
-source_checkpoint_sha256: ab1324cf4764317b62a801cee513b0c6309889f20614051bd672062713120ff7
+source_checkpoint_sha256: 03a8247b438327b6997e79eecb9fc48e95f7b5172805aae2743bd5d0a3b41e27  # 2026-10-15_17-16-22 model_60000 (60k, latest DR)
 reference_action_prior_embedded_in_onnx: true
 physical_robot_tested: false

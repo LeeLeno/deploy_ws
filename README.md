@@ -302,3 +302,6 @@ cmake .. -DCMAKE_BUILD_TYPE=Release && make -j$(nproc)
 
   cd /home/unitree/ws/mimiclite_dr/deploy_ws/unitree_rl_lab/deploy/robots/g1_29dof/build
   ./g1_ctrl --network eth0 --log
+
+  cd /home/unitree/ws/mimiclite_dr/deploy_ws/unitree_rl_lab/deploy/robots/g1_29dof/build
+  ./g1_ctrl --network eth0 --log
