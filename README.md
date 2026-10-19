@@ -1,11 +1,11 @@
 # deploy_ws
 
-Deployment-side workspace for **UniLab** (WarpSAC + WBT G1-29DOF dance). Adapts
+Deployment-side workspace for **FlashMimic / UniLab** (SAC + WBT G1-29DOF dance). Adapts
 Unitree's open-source stack (`unitree_rl_lab` + `unitree_mujoco` +
 `unitree_sdk2`) to run WBT-trained policies on a real G1 over DDS via
 `g1_ctrl`.
 
-> The training-side `UniLab` repo is private — request access separately if
+> The training-side repository is private — request access separately if
 > you need to regenerate `assets/`.
 
 ## Layout
@@ -13,9 +13,11 @@ Unitree's open-source stack (`unitree_rl_lab` + `unitree_mujoco` +
 ```
 deploy_ws/
 ├── assets/                 # in-git runtime artifacts
-│   ├── policy.onnx(+.data)                     #   MimicLite DR 140k: obs[1,397] → action[1,29]; weights in .data
-│   ├── dance1_subject2_part.npz / .bin         #   training motion; .bin = scripts/export_motion_bin.py(npz), all 31 bodies
-│   └── mimiclite_dr_140k_deploy_config.yaml     #   obs_layout, future_steps, default_angles, latency
+│   ├── flashmimic_fast_17500/                 # active: gravity-fixed mjwarp_fast model_17500.pt
+│   │   ├── policy.onnx + policy.onnx.data     # obs[1,397] → action[1,29], reference prior embedded
+│   │   ├── deploy_config.yaml / dance1_subject2_part.bin
+│   │   └── deployment_manifest.json          # source/checkpoint/asset hashes and policy contract
+│   └── policy.onnx / mimiclite_dr_140k_deploy_config.yaml  # retained legacy MimicLite assets
 ├── patches/                # diffs against pinned upstream
 │   ├── unitree_mujoco-g1-scene.patch    # sim2sim: default scene → G1
 │   └── unitree_rl_lab-wbt-fsm.patch     # adds State_WBT to g1_ctrl FSM + --network NIC check
@@ -59,14 +61,27 @@ Mimic_WBT_Dance1 also auto-falls back to `Velocity` when the clip ends and to
 
 ## Current policy contract
 
-The checked-in actor is exported from UniLab `feat/mimiclite-obs` commit
-`35590827`, checkpoint
-`logs/warp_sac/G1MotionTrackingSAC/2026-09-30_14-53-45_mjwarp/model_140000.pt`.
+The active actor is exported from FlashMimic `main@d3990125` plus the
+body-gravity sensor fix, checkpoint
+`logs/flash_sac/G1MotionTracking/2026-10-19_22-42-11_mjwarp_gravity_fix_60k/model_17500.pt`.
+`assets/flashmimic_fast_17500/export_manifest.json` records the checkpoint,
+training XML, and ONNX hashes; `training_source.patch` records the training fix.
 Its 397-float actor order is `last_action`, the three eight-frame reference
 windows, `base_ang_vel`, `projected_gravity`, raw `joint_pos`, and raw
 `joint_vel`.  The physical target uses the previous raw action for the one
 control-step delay configured by training; observation noise is not injected
-on the robot.
+on the robot. The ONNX embeds the reference-action prior and the residual scale
+of 0.25; do not add the prior again in deployment.
+
+Training and deployment both use standard body-frame gravity
+`R^T * [0, 0, -1]`. The earlier FlashMimic checkpoints trained with a world-frame
+pelvis-axis observation require a different input convention and must not
+replace this policy under the standard contract. No temporary
+`gravity_observation` adaptation is enabled in this version.
+
+The user reports the gravity-fixed 17.5k policy runs on the physical G1;
+occasional uneven stepping and larger action changes remain under investigation.
+This records a functional trial, not a claim that these remaining effects are fixed.
 
 LowState has no global root-position sensor.  The deploy path anchors the
 current reference pelvis at the measured robot pose and supplies future root
@@ -74,19 +89,28 @@ displacements in the projected-yaw frame for `ref_root_pos_future_local`.
 
 ## Redeploy a new training run
 
-Drop new files into `assets/` (paths in `config.yaml` resolve here):
+Replace the active files together (paths in the patched `config.yaml` resolve here):
 
 ```
-assets/policy.onnx + policy.onnx.data            # new actor (keep together)
-assets/<motion>.bin                              # python3 scripts/export_motion_bin.py <motion>.npz <motion>.bin
-assets/mimiclite_dr_*_deploy_config.yaml         # must match training
+assets/flashmimic_fast_17500/policy.onnx + policy.onnx.data
+assets/flashmimic_fast_17500/dance1_subject2_part.bin
+assets/flashmimic_fast_17500/deploy_config.yaml  # must match training
 ```
 
 Paths and PD gains (`kp`/`kd`, = training MJCF actuator gains) live in
 `config/config.yaml` → `Mimic_WBT_Dance1`.  No rebuild needed; `g1_ctrl` loads
-them at start-up (State_WBT constructor).  Before any robot run, verify offline:
-`PYTHON=<py with onnxruntime>=1.18> [UNILAB=<UniLab checkout>] scripts/parity/run_parity.sh`
-must print `PARITY PASS`.
+them at start-up (State_WBT constructor). Changing C++ sources or applying a new
+source patch requires rebuilding. The tracked patch includes the existing DIAG v2
+CSV instrumentation (205 columns, per-row `fflush`, `fsync` every 25 rows), so its
+diagnostic behavior is reproducible from a fresh checkout. The CSV is closed
+after joining the policy thread to avoid a concurrent write during exit.
+
+For the retained legacy MimicLite assets, the offline parity command is
+`PYTHON=<py with onnxruntime>=1.18> [UNILAB=<UniLab checkout>] scripts/parity/run_parity.sh`;
+it must print `PARITY PASS`. For the active FlashMimic assets,
+the exporter checks ONNX against the checkpoint (64 inputs, maximum absolute
+error `1.1623e-6`); the reconstruction hashes in `deployment_manifest.json`
+also verify the tracked source patch and active runtime artifacts.
 
 ## First-time build
 

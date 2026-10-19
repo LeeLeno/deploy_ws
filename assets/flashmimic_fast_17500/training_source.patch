@@ -1,0 +1,61 @@
+diff --git a/src/flashmimic/assets/robots/g1/g1.xml b/src/flashmimic/assets/robots/g1/g1.xml
+index 12a5a56..41c2a1d 100644
+--- a/src/flashmimic/assets/robots/g1/g1.xml
++++ b/src/flashmimic/assets/robots/g1/g1.xml
+@@ -367,7 +367,8 @@
+     <velocimeter site="imu_in_pelvis" name="pelvis_local_linvel"/>
+     <gyro site="imu_in_pelvis" name="pelvis_gyro" cutoff="34.9" noise="0.0005"/>
+     <accelerometer site="imu_in_pelvis" name="pelvis_acceleration" cutoff="157" noise="0.01"/>
+-    <framezaxis objtype="site" objname="imu_in_pelvis" name="pelvis_upvector"/>
++    <!-- World up in the pelvis IMU frame; negating it gives body-frame gravity. -->
++    <framezaxis objtype="xbody" objname="world" reftype="site" refname="imu_in_pelvis" name="pelvis_upvector"/>
+ 
+     <gyro site="imu_in_torso" name="torso_gyro" cutoff="34.9" noise="0.0005"/>
+     <accelerometer site="imu_in_torso" name="torso_acceleration" cutoff="157" noise="0.01"/>
+diff --git a/tests/assets/test_scene.py b/tests/assets/test_scene.py
+index 469cd2c..db0cd4b 100644
+--- a/tests/assets/test_scene.py
++++ b/tests/assets/test_scene.py
+@@ -3,7 +3,12 @@ from __future__ import annotations
+ import xml.etree.ElementTree as ET
+ from pathlib import Path
+ 
++import mujoco
++import numpy as np
++import pytest
++
+ from flashmimic.assets import robot_fragment
++from tests.conftest import compose_task
+ 
+ 
+ def test_packaged_torque_sensor_fragment_is_complete():
+@@ -16,3 +21,29 @@ def test_packaged_torque_sensor_fragment_is_complete():
+     names = [sensor.attrib["name"] for sensor in sensors]
+     assert len(names) == len(set(names))
+     assert all(name.endswith("_torque") for name in names)
++
++
++@pytest.mark.parametrize("yaw_deg", [0, 90, 180])
++@pytest.mark.parametrize("roll_deg,pitch_deg", [(0, 0), (10, 0), (-10, 0), (0, 10), (0, -10), (20, -15)])
++def test_policy_gravity_is_body_frame_and_yaw_invariant(roll_deg, pitch_deg, yaw_deg):
++    cfg = compose_task("g1_flash_mimic/mjwarp_fast")
++    model = mujoco.MjModel.from_xml_path(cfg.env.scene.model_file)
++    data = mujoco.MjData(model)
++    mujoco.mj_resetDataKeyframe(model, data, model.key("stand").id)
++
++    roll, pitch, yaw = np.deg2rad([roll_deg, pitch_deg, yaw_deg])
++    q_roll = np.array([np.cos(roll / 2), np.sin(roll / 2), 0, 0])
++    q_pitch = np.array([np.cos(pitch / 2), 0, np.sin(pitch / 2), 0])
++    q_yaw = np.array([np.cos(yaw / 2), 0, 0, np.sin(yaw / 2)])
++    q_tilt = np.empty(4)
++    mujoco.mju_mulQuat(q_tilt, q_pitch, q_roll)
++    mujoco.mju_mulQuat(data.qpos[3:7], q_yaw, q_tilt)
++    mujoco.mj_forward(model, data)
++
++    # For R = Rz(yaw) Ry(pitch) Rx(roll), R.T @ [0, 0, -1] is
++    # independent of yaw. The old -R @ [0, 0, 1] reverses tilt feedback.
++    expected = [np.sin(pitch), -np.cos(pitch) * np.sin(roll), -np.cos(pitch) * np.cos(roll)]
++    for group in ("actor", "critic"):
++        term = cfg.env.observations[group].terms.projected_gravity_u
++        gravity = -data.sensor(term.params.sensor_name).data
++        np.testing.assert_allclose(gravity, expected, atol=1e-12)

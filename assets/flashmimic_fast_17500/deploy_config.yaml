@@ -1,4 +1,5 @@
-# FlashMimic mjwarp_fast 60k (run 2026-10-15_17-16-22, latest DR/noise); feedforward embedded in ONNX.
+# FlashMimic mjwarp_fast 17.5k (run 2026-10-19_22-42-11_mjwarp_gravity_fix_60k).
+# Standard body-frame gravity R^T * [0,0,-1]; reference prior embedded in ONNX.
 obs_dim: 397
 action_dim: 29
 ctrl_dt: 0.02
@@ -124,6 +125,7 @@ joint_upper:
 - 1.97222
 - 1.61443
 - 1.61443
-source_checkpoint_sha256: 03a8247b438327b6997e79eecb9fc48e95f7b5172805aae2743bd5d0a3b41e27  # 2026-10-15_17-16-22 model_60000 (60k, latest DR)
+source_checkpoint_sha256: d021855f69c691e8b1be3227c583bb045fc96319a963e017b4f6aa12b48aeda2
 reference_action_prior_embedded_in_onnx: true
-physical_robot_tested: false
+# User reports this 17.5k version runs on the G1; residual stepping variation remains.
+physical_robot_tested: true

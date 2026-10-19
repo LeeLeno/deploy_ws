@@ -1,0 +1,28 @@
+{
+  "source_checkpoint": "/home/user/flashmimic/flashsac/FlashMimic/logs/flash_sac/G1MotionTracking/2026-10-19_22-42-11_mjwarp_gravity_fix_60k/model_17500.pt",
+  "checkpoint_sha256": "d021855f69c691e8b1be3227c583bb045fc96319a963e017b4f6aa12b48aeda2",
+  "gravity_observation": "body-frame gravity: R^T * [0,0,-1]",
+  "training_g1_xml_sha256": "6fd206ef75eb2906f6d22097f7fac15a8f7ae2754dc0dee7a3fffe890279e7e3",
+  "reference_action_prior": {
+    "enabled": true,
+    "future_step": 1,
+    "residual_scale": 0.25
+  },
+  "obs_dim": 397,
+  "action_dim": 29,
+  "onnx_max_abs_error": 1.1622905731201172e-06,
+  "validation_inputs": 64,
+  "external_data_locations": [
+    "policy.onnx.data"
+  ],
+  "files": {
+    "policy.onnx": {
+      "bytes": 47054,
+      "sha256": "6ea0141f042f42ca35525e1981cd141609073e3b858ce1904f97aa15d28bae5f"
+    },
+    "policy.onnx.data": {
+      "bytes": 1278672,
+      "sha256": "4b7b8d7dfcbfe3cb8b7e03f83219d4fa01d214a798ba5af2c176ae8bac16265b"
+    }
+  }
+}

@@ -1,12 +1,12 @@
 {
-  "checkpoint": "/home/user/flashmimic/flashsac/FlashMimic/logs/flash_sac/G1MotionTracking/2026-10-14_13-19-26_mjwarp/model_17500.pt",
-  "checkpoint_sha256": "ab1324cf4764317b62a801cee513b0c6309889f20614051bd672062713120ff7",
-  "onnx": "/home/user/flashmimic/flashsac/FlashMimic/logs/deployment_checks/mjwarp_fast_17500/assets/flashmimic_fast_17500/policy.onnx",
+  "checkpoint": "/home/user/flashmimic/flashsac/FlashMimic/logs/flash_sac/G1MotionTracking/2026-10-19_22-42-11_mjwarp_gravity_fix_60k/model_17500.pt",
+  "checkpoint_sha256": "d021855f69c691e8b1be3227c583bb045fc96319a963e017b4f6aa12b48aeda2",
+  "onnx": "/home/user/flashmimic/flashsac/FlashMimic/logs/flash_sac/G1MotionTracking/2026-10-19_22-42-11_mjwarp_gravity_fix_60k/export_17500/policy.onnx",
   "observation_dim": 397,
   "action_dim": 29,
-  "onnx_max_abs_error": 8.754432201385498e-07,
+  "onnx_max_abs_error": 1.1622905731201172e-06,
   "validation_inputs": 64,
-  "export_wall_seconds": 1.5871749439975247,
+  "export_wall_seconds": 1.4137213790090755,
   "control_dt": 0.02,
   "action_config": {
     "joint_pos": {
@@ -44,8 +44,8 @@
         },
         "noise": {
           "_target_": "unilab.managers._noise.UniformNoiseCfg",
-          "n_min": -0.0087,
-          "n_max": 0.0087
+          "n_min": -0.25,
+          "n_max": 0.25
         }
       },
       "ref_root_ori_future_b_u": {

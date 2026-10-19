@@ -1,0 +1,76 @@
+{
+  "training_base_commit": "d3990125a2f140efe51f59bc6d84468a1846dd21",
+  "training_branch": "main",
+  "training_run": "2026-10-19_22-42-11_mjwarp_gravity_fix_60k",
+  "training_task": "g1_flash_mimic/mjwarp_fast",
+  "checkpoint_iteration": 17500,
+  "checkpoint_sha256": "d021855f69c691e8b1be3227c583bb045fc96319a963e017b4f6aa12b48aeda2",
+  "training_xml_sha256": "6fd206ef75eb2906f6d22097f7fac15a8f7ae2754dc0dee7a3fffe890279e7e3",
+  "training_source_patch": "training_source.patch",
+  "training_source_patch_sha256": "7da51e8f7d312111c846d72653a24823a324fdc5038712c6aa901aee2814a725",
+  "gravity_observation": "body-frame gravity: R^T * [0,0,-1]",
+  "temporary_deployment_gravity_adaptation": false,
+  "physical_robot_trial": {
+    "status": "user_reported_functional",
+    "remaining_observations": "occasional uneven stepping and larger action changes; not yet optimized"
+  },
+  "upstream_unitree_rl_lab_commit": "4960b84732b0c2ec593dccbfe963fda1bcd7b1e3",
+  "runtime_source_patch": "patches/unitree_rl_lab-wbt-fsm.patch",
+  "runtime_source_patch_sha256": "874f83a619dc86cb11f477b47af17ea8357e753c19b63e91e0867a6384bfb5c3",
+  "runtime_files_sha256": {
+    "unitree_rl_lab/deploy/include/FSM/State_RLBase.h": "90150b0d40c96bfad907b7e5dcd29bc0b4932deb9b5ec6dd7443488e1cbb7b3a",
+    "unitree_rl_lab/deploy/include/isaaclab/algorithms/algorithms.h": "b49a7cc9bec408aef76a02a3e32c4ea910a54ba2490d472a2d3abf11a5b99b9f",
+    "unitree_rl_lab/deploy/include/isaaclab/assets/articulation/articulation.h": "13c7a0cca9fb4dfaf70d9c45ab339cc91c7c0eeb99d30ef2d557c867a71ae723",
+    "unitree_rl_lab/deploy/include/isaaclab/envs/mdp/actions/joint_actions.h": "557c81817692481a7d0c06cef78c98d9d0a176e000929fee4cbe603edd9058a7",
+    "unitree_rl_lab/deploy/include/isaaclab/envs/mdp/observations/observations.h": "62095cf105f75c3a5b01e526ea9d60944f21a67ddabbc720cb3cf956c4160a36",
+    "unitree_rl_lab/deploy/include/param.h": "85f96adf3b61094da61134736c5e8c1142a0859ea876bd27c313a0dfa144b5f0",
+    "unitree_rl_lab/deploy/include/unitree_articulation.h": "b9ae744a6ae758eae5afc7a1da2897c15503dcc6db94f546282321f4384aa244",
+    "unitree_rl_lab/deploy/robots/g1_29dof/CMakeLists.txt": "06f83d05ea9de664f9ca602a2a09944c6b2c42da3207188dfefd09bf755ad44a",
+    "unitree_rl_lab/deploy/robots/g1_29dof/config/config.yaml": "4115bd76a69fecef683d83e751933ccb600bd23feda9d7ad4f4767af45be0609",
+    "unitree_rl_lab/deploy/robots/g1_29dof/include/NetIfCheck.h": "991566e9a760e98b06423dcfb7c4d48fa7f03a3d4e35a6c57d6a03c03e9c0873",
+    "unitree_rl_lab/deploy/robots/g1_29dof/include/State_WBT.h": "5b1c9aaf0a75b8fb43e847db950346f19b3f06735a3f06129908de35e9826ee0",
+    "unitree_rl_lab/deploy/robots/g1_29dof/include/WBT_Policy.h": "24b800027afafe23922e87581451ef0d0d42433fb5440a203ff10187b3120ff1",
+    "unitree_rl_lab/deploy/robots/g1_29dof/main.cpp": "6031770d71aced471280f5e3904b3a837ea02b963418bc435d2dd6e4be0b39e2",
+    "unitree_rl_lab/deploy/robots/g1_29dof/src/State_WBT.cpp": "290ba7a7891474cc6b38e6f6544c2dfb528ec6e72a42f3b75432d81a6af5dedf",
+    "unitree_rl_lab/deploy/robots/g1_29dof/src/WBT_Policy.cpp": "13dd69f82dd429da1a1d3e12ec9b830c6f2c66e900a9d21e3a9e96fac2129b1e"
+  },
+  "active_files": {
+    "policy.onnx": {
+      "bytes": 47054,
+      "sha256": "6ea0141f042f42ca35525e1981cd141609073e3b858ce1904f97aa15d28bae5f"
+    },
+    "policy.onnx.data": {
+      "bytes": 1278672,
+      "sha256": "4b7b8d7dfcbfe3cb8b7e03f83219d4fa01d214a798ba5af2c176ae8bac16265b"
+    },
+    "deploy_config.yaml": {
+      "bytes": 1799,
+      "sha256": "f25e38038c4b2f5913ce7325f4dcfa4e32903bbfb38304118987b3fa9ce2325d"
+    },
+    "dance1_subject2_part.bin": {
+      "bytes": 1604296,
+      "sha256": "b5da572a25fda62e39fb24fdfa84dae86c740b655e1ec323252d8a41b60d1156"
+    },
+    "policy.json": {
+      "bytes": 4861,
+      "sha256": "88c6134c95893ce899d0c9e2a3330a0a04d9827850e5d470bb594ca3248f61c4"
+    },
+    "export_manifest.json": {
+      "bytes": 978,
+      "sha256": "0015ee2e98f6c6250c816bd5728e809fc975cd2ff3da88c3592208a96010b985"
+    }
+  },
+  "validation": {
+    "patch_applies_to_upstream": true,
+    "rebuilt_sources_match_manifest": true,
+    "onnx_checkpoint_validation": 1.1622905731201172e-06,
+    "onnx_checker_and_cpu_shapes": true,
+    "onnx_finite_random_inputs": 8,
+    "mechanical_and_fsm_config_matches_device_baseline": true,
+    "state_wbt_cpp_offline_object_compilation": "passed g++17 with fake Types.h; no control program linked or executed",
+    "logger_close_after_policy_thread_join": true
+  },
+  "runtime_changes_from_device_baseline": {
+    "deploy/robots/g1_29dof/src/State_WBT.cpp": "Join the policy thread before flushing and closing the diagnostic CSV to avoid concurrent writes during exit."
+  }
+}
