@@ -1,0 +1,20 @@
+{
+  "source_motion": "src/flashmimic/assets/motions/g1/dance1_subject2_part.npz",
+  "fps": 50.0,
+  "num_frames": 870,
+  "reference_future_step": 1,
+  "dynamic_frame_min": 100,
+  "interpretation": "Reference joint-target slew only. Controller corrections for balance legitimately add motion; this does not define an optimal zero-correction target.",
+  "lower_body": {
+    "rms_rad": 0.03725771117610663,
+    "p95_abs_rad": 0.08347414433956146,
+    "max_abs_rad": 0.24809300899505615,
+    "second_diff_rms_rad": 0.014835414549815174
+  },
+  "ankles": {
+    "rms_rad": 0.029495848674005332,
+    "p95_abs_rad": 0.06678272038698196,
+    "max_abs_rad": 0.22456488013267517,
+    "second_diff_rms_rad": 0.01636281731621995
+  }
+}

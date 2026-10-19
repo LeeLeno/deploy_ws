@@ -1,0 +1,19 @@
+{
+  "argv": [
+    "/home/user/flashmimic/flashsac/FlashMimic/.venv/bin/flashmimic-train",
+    "task=g1_flash_mimic/mjwarp_fast",
+    "algo.max_iterations=17500",
+    "algo.resume=false",
+    "algo.seed=1",
+    "reward.action_rate_l2.weight=-0.4",
+    "training.cuda_process_sharing=mps",
+    "training.log_dir=/home/user/flashmimic/flashsac/FlashMimic/logs/action_rate_17500/2026-10-19_23-20-31/rate_040_seed1"
+  ],
+  "launched_at": "2026-10-19T23:29:56.163470",
+  "max_iterations": 17500,
+  "action_rate_weight": -0.4,
+  "seed": 1,
+  "resume": false,
+  "g1_xml_sha256": "6fd206ef75eb2906f6d22097f7fac15a8f7ae2754dc0dee7a3fffe890279e7e3",
+  "pid": 1315967
+}

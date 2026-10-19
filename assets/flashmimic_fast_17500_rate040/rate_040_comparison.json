@@ -1,0 +1,254 @@
+[
+  {
+    "protocol": "uniform",
+    "seed": 123,
+    "environment_and_seed_match": true,
+    "baseline_terminations": 0,
+    "candidate_terminations": 0,
+    "completion": null,
+    "metric_ratios": {
+      "error_anchor_pos": 1.0877192349618008,
+      "error_anchor_rot": 1.10755403080523,
+      "error_anchor_lin_vel": 1.019573738373316,
+      "error_anchor_ang_vel": 0.9778189244534783,
+      "error_body_pos": 1.0176955609087186,
+      "error_body_rot": 0.9977149539533656,
+      "error_body_lin_vel": 1.0149878720602734,
+      "error_body_ang_vel": 0.9806241632961242,
+      "joint_rmse_rad": 0.9788333538175391,
+      "joint_velocity_rmse_rad_s": 0.9698663457553957,
+      "action_delta_rms": 0.8368738315705909,
+      "actuator_torque_rms_nm": 0.9652553908675553
+    },
+    "diagnostic_ratios": {
+      "all_valid_transitions": {
+        "baseline_valid_transitions": 191406,
+        "candidate_valid_transitions": 191406,
+        "target_delta": {
+          "lower_body": {
+            "rms_rad": 0.8933275836522069,
+            "p95_abs_rad": 0.8895495499128909,
+            "max_abs_rad": 0.8734444882746613
+          },
+          "ankles": {
+            "rms_rad": 0.8993077893276419,
+            "p95_abs_rad": 0.9119760725858646,
+            "max_abs_rad": 0.8734444882746613
+          }
+        },
+        "foot_tracking": {
+          "left_ankle_roll_link": {
+            "height_rmse_m": 1.0383743506505394,
+            "vertical_speed_rmse_m_s": 0.9739139364829313
+          },
+          "right_ankle_roll_link": {
+            "height_rmse_m": 1.109889692242344,
+            "vertical_speed_rmse_m_s": 1.0476351789828178
+          }
+        }
+      }
+    }
+  },
+  {
+    "protocol": "uniform",
+    "seed": 456,
+    "environment_and_seed_match": true,
+    "baseline_terminations": 1,
+    "candidate_terminations": 0,
+    "completion": null,
+    "metric_ratios": {
+      "error_anchor_pos": 1.0701250349776017,
+      "error_anchor_rot": 1.1204742862157369,
+      "error_anchor_lin_vel": 1.0166673977610294,
+      "error_anchor_ang_vel": 0.97553443426784,
+      "error_body_pos": 1.0257067334608532,
+      "error_body_rot": 1.001567644150429,
+      "error_body_lin_vel": 1.01232981441599,
+      "error_body_ang_vel": 0.9807427680987117,
+      "joint_rmse_rad": 0.9815241896839968,
+      "joint_velocity_rmse_rad_s": 0.9700014114047366,
+      "action_delta_rms": 0.8362775119837675,
+      "actuator_torque_rms_nm": 0.9656811317351714
+    },
+    "diagnostic_ratios": {
+      "all_valid_transitions": {
+        "baseline_valid_transitions": 191384,
+        "candidate_valid_transitions": 191387,
+        "target_delta": {
+          "lower_body": {
+            "rms_rad": 0.8936821899219884,
+            "p95_abs_rad": 0.8884104158692169,
+            "max_abs_rad": 0.8790745607809975
+          },
+          "ankles": {
+            "rms_rad": 0.8982043454076838,
+            "p95_abs_rad": 0.9135763319691794,
+            "max_abs_rad": 0.8790745607809975
+          }
+        },
+        "foot_tracking": {
+          "left_ankle_roll_link": {
+            "height_rmse_m": 1.046009178747998,
+            "vertical_speed_rmse_m_s": 0.9789853546930625
+          },
+          "right_ankle_roll_link": {
+            "height_rmse_m": 1.1185168756143364,
+            "vertical_speed_rmse_m_s": 1.0590558892292472
+          }
+        }
+      }
+    }
+  },
+  {
+    "protocol": "full_clip",
+    "seed": 123,
+    "environment_and_seed_match": true,
+    "baseline_terminations": 0,
+    "candidate_terminations": 0,
+    "completion": 1.0,
+    "metric_ratios": {
+      "error_anchor_pos": 1.1427735459404653,
+      "error_anchor_rot": 1.1163386992871709,
+      "error_anchor_lin_vel": 1.030584844586643,
+      "error_anchor_ang_vel": 0.979159230304152,
+      "error_body_pos": 1.0290737593654893,
+      "error_body_rot": 1.0024607129205265,
+      "error_body_lin_vel": 1.024045579209579,
+      "error_body_ang_vel": 0.987025562348601,
+      "joint_rmse_rad": 0.9782273464929119,
+      "joint_velocity_rmse_rad_s": 0.9845425756618361,
+      "action_delta_rms": 0.8417262216288587,
+      "actuator_torque_rms_nm": 0.9649365388908627
+    },
+    "diagnostic_ratios": {
+      "all_valid_transitions": {
+        "baseline_valid_transitions": 111232,
+        "candidate_valid_transitions": 111232,
+        "target_delta": {
+          "lower_body": {
+            "rms_rad": 0.9012258159672117,
+            "p95_abs_rad": 0.8988381135544964,
+            "max_abs_rad": 0.8948737876036705
+          },
+          "ankles": {
+            "rms_rad": 0.9044649424076682,
+            "p95_abs_rad": 0.9264107903927769,
+            "max_abs_rad": 0.8948737876036705
+          }
+        },
+        "foot_tracking": {
+          "left_ankle_roll_link": {
+            "height_rmse_m": 1.0394695247801706,
+            "vertical_speed_rmse_m_s": 0.9836261247062863
+          },
+          "right_ankle_roll_link": {
+            "height_rmse_m": 1.1286688259209148,
+            "vertical_speed_rmse_m_s": 1.0903793355877665
+          }
+        }
+      },
+      "dynamic_frame_ge_100": {
+        "baseline_valid_transitions": 98560,
+        "candidate_valid_transitions": 98560,
+        "target_delta": {
+          "lower_body": {
+            "rms_rad": 0.9059246954908291,
+            "p95_abs_rad": 0.9023473972584511,
+            "max_abs_rad": 0.8948737876036705
+          },
+          "ankles": {
+            "rms_rad": 0.9135783357811343,
+            "p95_abs_rad": 0.9323914879116799,
+            "max_abs_rad": 0.8948737876036705
+          }
+        },
+        "foot_tracking": {
+          "left_ankle_roll_link": {
+            "height_rmse_m": 1.0503667598600521,
+            "vertical_speed_rmse_m_s": 0.9889050916230568
+          },
+          "right_ankle_roll_link": {
+            "height_rmse_m": 1.1137623147156994,
+            "vertical_speed_rmse_m_s": 1.075701043226052
+          }
+        }
+      }
+    }
+  },
+  {
+    "protocol": "full_clip",
+    "seed": 456,
+    "environment_and_seed_match": true,
+    "baseline_terminations": 0,
+    "candidate_terminations": 0,
+    "completion": 1.0,
+    "metric_ratios": {
+      "error_anchor_pos": 1.1144373565577448,
+      "error_anchor_rot": 1.1085531525081878,
+      "error_anchor_lin_vel": 1.019714147182411,
+      "error_anchor_ang_vel": 0.9767057665302861,
+      "error_body_pos": 1.0264831455472363,
+      "error_body_rot": 0.9985884282790242,
+      "error_body_lin_vel": 1.0170054612132264,
+      "error_body_ang_vel": 0.9841314188693758,
+      "joint_rmse_rad": 0.9766155752059765,
+      "joint_velocity_rmse_rad_s": 0.9814121753509558,
+      "action_delta_rms": 0.8375496091818166,
+      "actuator_torque_rms_nm": 0.9623086450334145
+    },
+    "diagnostic_ratios": {
+      "all_valid_transitions": {
+        "baseline_valid_transitions": 111232,
+        "candidate_valid_transitions": 111232,
+        "target_delta": {
+          "lower_body": {
+            "rms_rad": 0.8952371525973729,
+            "p95_abs_rad": 0.8918137937247906,
+            "max_abs_rad": 0.9041662073784951
+          },
+          "ankles": {
+            "rms_rad": 0.899542973691532,
+            "p95_abs_rad": 0.9195599810258374,
+            "max_abs_rad": 0.9041662073784951
+          }
+        },
+        "foot_tracking": {
+          "left_ankle_roll_link": {
+            "height_rmse_m": 1.0400260193310553,
+            "vertical_speed_rmse_m_s": 0.9838555840233145
+          },
+          "right_ankle_roll_link": {
+            "height_rmse_m": 1.1260178221308168,
+            "vertical_speed_rmse_m_s": 1.0809280733292528
+          }
+        }
+      },
+      "dynamic_frame_ge_100": {
+        "baseline_valid_transitions": 98560,
+        "candidate_valid_transitions": 98560,
+        "target_delta": {
+          "lower_body": {
+            "rms_rad": 0.900074731683811,
+            "p95_abs_rad": 0.8951856349562054,
+            "max_abs_rad": 0.9041662073784951
+          },
+          "ankles": {
+            "rms_rad": 0.9078509927598715,
+            "p95_abs_rad": 0.9237948258755546,
+            "max_abs_rad": 0.9041662073784951
+          }
+        },
+        "foot_tracking": {
+          "left_ankle_roll_link": {
+            "height_rmse_m": 1.051360157663828,
+            "vertical_speed_rmse_m_s": 0.9897314575160177
+          },
+          "right_ankle_roll_link": {
+            "height_rmse_m": 1.1067242387943328,
+            "vertical_speed_rmse_m_s": 1.0652091418844272
+          }
+        }
+      }
+    }
+  }
+]

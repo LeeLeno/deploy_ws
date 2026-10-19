@@ -1,0 +1,128 @@
+{
+  "source_checkpoint": "/home/user/flashmimic/flashsac/FlashMimic/logs/action_rate_17500/2026-10-19_23-20-31/rate_040_seed1/model_17500.pt",
+  "checkpoint_sha256": "6c3e04c5e8497e882133d010635efa4c201a694832314559a44ae2253cccdcc8",
+  "checkpoint_iterations": 17500,
+  "action_rate_l2_weight": -0.4,
+  "action_acc_l2_weight": 0.0,
+  "gravity_observation": "body-frame gravity: R^T * [0,0,-1]",
+  "onnx_max_abs_error": 9.08970832824707e-07,
+  "validation_inputs": 64,
+  "observation_dim": 397,
+  "action_dim": 29,
+  "reference_action_prior": {
+    "enabled": true,
+    "future_step": 1,
+    "residual_scale": 0.25
+  },
+  "control_dt": 0.02,
+  "latency_steps": 1,
+  "mechanical_config_identical_to_tested_baseline": true,
+  "physical_robot_tested": false,
+  "files": {
+    "README.txt": {
+      "bytes": 1319,
+      "sha256": "5f97a504ec4a4edb7a2ab9fde3503fc5ce47c01044d6825fb2ee7d694e54f133"
+    },
+    "baseline_clean_evaluation.json": {
+      "bytes": 29556,
+      "sha256": "c8533cde40ba4d86f088263098c6767d79639d6178d1f6d71b7e07d485a63dc0"
+    },
+    "baseline_evaluation.json": {
+      "bytes": 49482,
+      "sha256": "21c81d1ecf2a6232acf87da2e896e38686f8cd5dfcf2e88460dd46f63c7e56c4"
+    },
+    "dance1_subject2_part.bin": {
+      "bytes": 1604296,
+      "sha256": "b5da572a25fda62e39fb24fdfa84dae86c740b655e1ec323252d8a41b60d1156"
+    },
+    "deploy_config.yaml": {
+      "bytes": 1748,
+      "sha256": "aba7a214a563a026f755f9c7dc423550fc37f187adb8e917ff342f297e66763e"
+    },
+    "evaluation_overview.csv": {
+      "bytes": 7170,
+      "sha256": "8da7197a6084544bd15fe5994772b625853f12811e5ffbc504b956910216182e"
+    },
+    "evaluation_overview.json": {
+      "bytes": 26320,
+      "sha256": "bdb6d42da046488b4984ecf72911724f2681fb0da8879fe091a86ee168b38d41"
+    },
+    "evaluation_overview.md": {
+      "bytes": 2305,
+      "sha256": "4fc0d2552aef8b555e63713a5ede685100f875f7763bcc10974246d451f4bba6"
+    },
+    "evaluation_script.py": {
+      "bytes": 19025,
+      "sha256": "f2c12b0ba85d132d8a0237112a4d1f1f8734c3bda604dd686c5db40b48aa468e"
+    },
+    "g1.gravity_fixed.xml": {
+      "bytes": 28965,
+      "sha256": "6fd206ef75eb2906f6d22097f7fac15a8f7ae2754dc0dee7a3fffe890279e7e3"
+    },
+    "policy.json": {
+      "bytes": 4825,
+      "sha256": "b7a17593ee4b5bbc2ee0edb417917d7bef4bab05f02a5e3f1200f81bfeb0b604"
+    },
+    "policy.onnx": {
+      "bytes": 47054,
+      "sha256": "e30e6ad8d4d5b80531810f52456636d44509ad4fb19773e85ad0e08d26de0c22"
+    },
+    "policy.onnx.data": {
+      "bytes": 1278672,
+      "sha256": "40e16517a8860fca97cb8f41401795c56733aa32897b85561cd84f87f03b7c47"
+    },
+    "rate_040_clean_comparison.json": {
+      "bytes": 5086,
+      "sha256": "7f31cc6cc088e0cd298dc23941a9cf4aa8120da64a8e8809c00df73c2f6df8da"
+    },
+    "rate_040_clean_evaluation.json": {
+      "bytes": 29454,
+      "sha256": "d8f61c30180a944f37242072d7d2798ead56cb66a21cc13d80b47286bb46e96b"
+    },
+    "rate_040_comparison.json": {
+      "bytes": 8440,
+      "sha256": "2029c259bcc60cac05c23740e4501a495ce37cdb6e8c28439ef83239e74d7866"
+    },
+    "rate_040_evaluation.json": {
+      "bytes": 49942,
+      "sha256": "0aa0f9b1e3be044407a36dcfcd9414b04676db782401aa1540582f41dd37f998"
+    },
+    "reference_slew.json": {
+      "bytes": 720,
+      "sha256": "c105c3858b457466ec39cfb67cdc6bbba0da01170cd388729345f06b7eebcbcc"
+    },
+    "results_summary.json": {
+      "bytes": 15240,
+      "sha256": "7c436bb1ccf10726da24e12d2de3c51037a4260f03b1674befd22650bd5b2f08"
+    },
+    "selection.json": {
+      "bytes": 1102,
+      "sha256": "756244f7090be8f5d8b4c3e32ddd70ce328258c0bbd631cbf18f713f67723dd3"
+    },
+    "training_launch.json": {
+      "bytes": 658,
+      "sha256": "71c264d4ca02c47bf7ab8c12fb98b2d20e150807ae8f248a12406b13d6affcc7"
+    },
+    "training_run_config.json": {
+      "bytes": 31172,
+      "sha256": "c1f3110ae41071a181ab7d03180ca028a7a45ed0b0956b74c94aad38f3e70d14"
+    },
+    "training_seed_audit.md": {
+      "bytes": 8458,
+      "sha256": "b8fdc10b5200e16a667aaa5f51ede0077903cc43e68d6db46e610a949470809a"
+    },
+    "training_source.patch": {
+      "bytes": 12799,
+      "sha256": "d49a3593f98b8f92792d765509146cf2e31d12d7042aac8d9cb905fd04eaf0cc"
+    },
+    "tuning_report.md": {
+      "bytes": 3406,
+      "sha256": "c9c887b44bc283a61dd096792d49ae8423682dd2344a39d5cd5defa90a66b38b"
+    }
+  },
+  "candidate_role": "optional_smoothing_tradeoff_manual_ab",
+  "baseline_remains_default": true,
+  "overall_real_robot_improvement_established": false,
+  "evaluation_groups_across_campaign": 36,
+  "training_seed_fully_controls_startup_dr": false
+}

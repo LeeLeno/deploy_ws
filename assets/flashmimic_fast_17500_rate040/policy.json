@@ -1,0 +1,176 @@
+{
+  "checkpoint": "/home/user/flashmimic/flashsac/FlashMimic/logs/action_rate_17500/2026-10-19_23-20-31/rate_040_seed1/model_17500.pt",
+  "checkpoint_sha256": "6c3e04c5e8497e882133d010635efa4c201a694832314559a44ae2253cccdcc8",
+  "onnx": "/home/user/flashmimic/flashsac/FlashMimic/logs/action_rate_17500/2026-10-19_23-20-31/rate_040_seed1/export_17500/policy.onnx",
+  "observation_dim": 397,
+  "action_dim": 29,
+  "onnx_max_abs_error": 9.08970832824707e-07,
+  "validation_inputs": 64,
+  "export_wall_seconds": 1.3636463780421764,
+  "control_dt": 0.02,
+  "action_config": {
+    "joint_pos": {
+      "_target_": "unilab.tasks.motion_tracking.common.manager_terms.MotionJointPositionActionCfg",
+      "entity_name": "robot",
+      "actuator_names": [
+        ".*"
+      ],
+      "scale": 2.0,
+      "use_default_offset": true,
+      "command_name": "motion",
+      "simulate_action_latency": true
+    }
+  },
+  "actor_observations": {
+    "enable_corruption": true,
+    "terms": {
+      "last_action": {
+        "func": "unilab.envs.mdp.last_action"
+      },
+      "ref_root_pos_future_local_u": {
+        "func": "flashmimic.tasks.motion_tracking.obs_terms.ref_root_pos_future_local",
+        "params": {
+          "command_name": "motion",
+          "future_steps": [
+            -8,
+            -4,
+            -2,
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        },
+        "noise": {
+          "_target_": "unilab.managers._noise.UniformNoiseCfg",
+          "n_min": -0.25,
+          "n_max": 0.25
+        }
+      },
+      "ref_root_ori_future_b_u": {
+        "func": "flashmimic.tasks.motion_tracking.obs_terms.ref_root_ori_future_b",
+        "params": {
+          "command_name": "motion",
+          "future_steps": [
+            -8,
+            -4,
+            -2,
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        },
+        "noise": {
+          "_target_": "unilab.managers._noise.UniformNoiseCfg",
+          "n_min": -0.087,
+          "n_max": 0.087
+        }
+      },
+      "ref_joint_pos_future_u": {
+        "func": "flashmimic.tasks.motion_tracking.obs_terms.ref_joint_pos_future",
+        "params": {
+          "command_name": "motion",
+          "future_steps": [
+            -8,
+            -4,
+            -2,
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        },
+        "noise": {
+          "_target_": "unilab.managers._noise.UniformNoiseCfg",
+          "n_min": -0.017,
+          "n_max": 0.017
+        }
+      },
+      "base_ang_vel_u": {
+        "func": "unilab.envs.mdp.builtin_sensor",
+        "params": {
+          "sensor_name": "torso_gyro"
+        },
+        "noise": {
+          "_target_": "unilab.managers._noise.UniformNoiseCfg",
+          "n_min": -0.35,
+          "n_max": 0.35
+        }
+      },
+      "projected_gravity_u": {
+        "func": "unilab.envs.mdp.projected_gravity_from_sensor",
+        "params": {
+          "sensor_name": "pelvis_upvector"
+        },
+        "noise": {
+          "_target_": "unilab.managers._noise.UniformNoiseCfg",
+          "n_min": -0.017,
+          "n_max": 0.017
+        }
+      },
+      "joint_pos_u": {
+        "func": "flashmimic.tasks.motion_tracking.obs_terms.motion_joint_pos",
+        "params": {
+          "command_name": "motion"
+        },
+        "noise": {
+          "_target_": "unilab.managers._noise.UniformNoiseCfg",
+          "n_min": -0.035,
+          "n_max": 0.035
+        }
+      },
+      "joint_vel_u": {
+        "func": "flashmimic.tasks.motion_tracking.obs_terms.motion_joint_vel",
+        "params": {
+          "command_name": "motion"
+        },
+        "noise": {
+          "_target_": "unilab.managers._noise.UniformNoiseCfg",
+          "n_min": -0.87,
+          "n_max": 0.87
+        }
+      }
+    }
+  },
+  "joint_names": [
+    "left_hip_pitch_joint",
+    "left_hip_roll_joint",
+    "left_hip_yaw_joint",
+    "left_knee_joint",
+    "left_ankle_pitch_joint",
+    "left_ankle_roll_joint",
+    "right_hip_pitch_joint",
+    "right_hip_roll_joint",
+    "right_hip_yaw_joint",
+    "right_knee_joint",
+    "right_ankle_pitch_joint",
+    "right_ankle_roll_joint",
+    "waist_yaw_joint",
+    "waist_roll_joint",
+    "waist_pitch_joint",
+    "left_shoulder_pitch_joint",
+    "left_shoulder_roll_joint",
+    "left_shoulder_yaw_joint",
+    "left_elbow_joint",
+    "left_wrist_roll_joint",
+    "left_wrist_pitch_joint",
+    "left_wrist_yaw_joint",
+    "right_shoulder_pitch_joint",
+    "right_shoulder_roll_joint",
+    "right_shoulder_yaw_joint",
+    "right_elbow_joint",
+    "right_wrist_roll_joint",
+    "right_wrist_pitch_joint",
+    "right_wrist_yaw_joint"
+  ],
+  "physical_robot_tested": false,
+  "reference_action_prior": {
+    "enabled": true,
+    "future_step": 1,
+    "residual_scale": 0.25
+  }
+}

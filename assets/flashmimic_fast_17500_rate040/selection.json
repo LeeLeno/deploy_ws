@@ -1,0 +1,7 @@
+{
+  "status": "completed_local_training_and_evaluation",
+  "default": "baseline",
+  "optional_manual_ab_candidate": "rate_040_seed1",
+  "physical_candidate_tested": false,
+  "decision_zh": "默认保留已由用户实测可部署的 gravity 修正后 17,500 基线，mjwarp_fast.yaml 的 action_rate_l2.weight 仍为 -0.20。本轮完成 5 组各 17,500 更新训练和 36 组评估；没有候选证明整体改善。可选人工对比版本为 rate=-0.40、不加 action_acc_l2。无人工观测噪声的全片评估中，其动态下肢目标变化 RMS/P95 降低 6.6%/7.6%，踝 RMS 降低 6.0%，力矩指标降低 3.4%；代价是躯干姿态误差 4.793°→5.366°、右脚高 RMSE 16.66→18.71 mm。含噪评估方向一致。040 含噪及无噪全片各完成 256/256。020+acc 的含噪全片 seed456 在帧760触发 anchor_pos，127/128 完成，拒绝该候选。040 仅是更平滑的取舍版本，实机是否改善仍待用户人工 A/B；不能由这些运动学结果推断落地冲击力已改善。资产与配置已独立打包，保留 baseline，未启动或访问实机。"
+}

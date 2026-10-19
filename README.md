@@ -83,6 +83,19 @@ The user reports the gravity-fixed 17.5k policy runs on the physical G1;
 occasional uneven stepping and larger action changes remain under investigation.
 This records a functional trial, not a claim that these remaining effects are fixed.
 
+An optional 17.5k smoothing candidate is retained separately in
+[`assets/flashmimic_fast_17500_rate040/`](assets/flashmimic_fast_17500_rate040/README.txt).
+It was trained from scratch with `reward.action_rate_l2.weight=-0.40`, compared
+with the active baseline's `-0.20`; no second-difference penalty was added.
+Across two evaluation seeds with observation corruption disabled and DR retained,
+dynamic lower-body target increments fell by 6.6% RMS and 7.6% P95, while right-foot
+height error rose from 16.66 to 18.71 mm and torso orientation error from 4.793° to
+5.366°. Both policies completed 256/256 clips with and without observation noise.
+This is a smoothing tradeoff for manual A/B testing, with no physical trial yet;
+the active baseline and runtime configuration remain unchanged. The
+[tuning report](assets/flashmimic_fast_17500_rate040/tuning_report.md) records all five
+17.5k training runs, 36 evaluation groups, and the limits of the comparison.
+
 LowState has no global root-position sensor.  The deploy path anchors the
 current reference pelvis at the measured robot pose and supplies future root
 displacements in the projected-yaw frame for `ref_root_pos_future_local`.
