@@ -1,6 +1,5 @@
 # FlashMimic mjwarp_fast 60k (run 2026-10-15_17-16-22, latest DR/noise); feedforward embedded in ONNX.
 obs_dim: 397
-gravity_observation: flashmimic_sensor_reference  # A/B baseline: body
 action_dim: 29
 ctrl_dt: 0.02
 action_scale: 2.0
