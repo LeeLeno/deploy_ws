@@ -1,0 +1,86 @@
+--- a/unitree_rl_lab/deploy/robots/g1_29dof/src/WBT_Policy.cpp
++++ b/unitree_rl_lab/deploy/robots/g1_29dof/src/WBT_Policy.cpp
+@@ -109,6 +109,17 @@
+ {
+     const auto& data = env->robot->data.torso_ang_vel_b;
+     return std::vector<float>(data.data(), data.data() + data.size());
++}
++// Compatibility with FlashMimic 60k: training negates MuJoCo's world-frame
++// pelvis Z axis. Undo begin()'s reference yaw alignment for arbitrary IMU yaw.
++REGISTER_OBSERVATION(wbt_training_gravity)
++{
++    if (!WBTPolicy::active) {
++        throw std::runtime_error("wbt_training_gravity: no active WBTPolicy");
++    }
++    const Eigen::Vector3f g = WBTPolicy::active->init_quat().conjugate()
++        * (env->robot->data.root_quat_w * Eigen::Vector3f(0.0f, 0.0f, -1.0f));
++    return std::vector<float>(g.data(), g.data() + 3);
+ }
+ REGISTER_OBSERVATION(wbt_ref_root_pos_future_local)
+ {
+@@ -253,7 +264,13 @@
+     // -- observations, in the exact obs_layout order (yaml-cpp maps preserve
+     // insertion order; ObservationManager concatenates in that order).
+     // UniLab actor term -> framework registrar.
+-    static const std::map<std::string, std::string> alias = {
++    const std::string gravity_observation = deploy_cfg["gravity_observation"]
++        ? deploy_cfg["gravity_observation"].as<std::string>() : "body";
++    if (gravity_observation != "body" && gravity_observation != "flashmimic_sensor_reference") {
++        throw std::runtime_error("WBTPolicy: unknown gravity_observation '" + gravity_observation + "'");
++    }
++    spdlog::info("WBTPolicy: [GRAVITY] gravity_observation={}", gravity_observation);
++    const std::map<std::string, std::string> alias = {
+         {"base_ang_vel",         "wbt_torso_ang_vel"},         // torso gyro (pelvis IMU + waist rates)
+         {"joint_pos",            "joint_pos"},                 // raw q (MimicLite)
+         {"joint_vel",            "joint_vel_rel"},             // raw dq
+@@ -261,7 +278,8 @@
+         {"ref_root_pos_future_local", "wbt_ref_root_pos_future_local"},
+         {"ref_root_ori_future_b", "wbt_ref_root_ori_future_b"},
+         {"ref_joint_pos_future", "wbt_ref_joint_pos_future"},
+-        {"projected_gravity",    "projected_gravity"},         // root_quat_w^-1 * [0,0,-1]
++        {"projected_gravity", gravity_observation == "body"
++            ? "projected_gravity" : "wbt_training_gravity"},
+     };
+ 
+     YAML::Node obs;
+@@ -403,6 +421,8 @@
+     const Eigen::Quaternionf robot_yaw = projected_yaw_quat(anchor_quat);
+     const Eigen::Quaternionf ref_yaw   = projected_yaw_quat(motion_->anchor_quat(frame_));
+     init_quat_ = robot_yaw * ref_yaw.conjugate();
++    spdlog::info("WBTPolicy: [GRAVITY] begin frame={} init_quat_wxyz=[{:.7f},{:.7f},{:.7f},{:.7f}]",
++                 frame_, init_quat_.w(), init_quat_.x(), init_quat_.y(), init_quat_.z());
+ 
+     env_->episode_length = 0;
+     env_->global_phase   = 0.0f;
+--- a/unitree_rl_lab/deploy/robots/g1_29dof/src/State_WBT.cpp
++++ b/unitree_rl_lab/deploy/robots/g1_29dof/src/State_WBT.cpp
+@@ -125,6 +125,8 @@
+             for (const char* p : {"tq","a","mq","mdq","tau","ojp","ola"}) {
+                 for (int j = 0; j < 29; ++j) std::fprintf(diag_fs_, ",%s%d", p, j);
+             }
++            // [GRAVITY] Append fields so the original 205 columns keep their indices.
++            std::fprintf(diag_fs_, ",imu_qw,imu_qx,imu_qy,imu_qz,ogx,ogy,ogz");
+             std::fprintf(diag_fs_, "\n");
+             std::fflush(diag_fs_);
+             ::fsync(::fileno(diag_fs_));
+@@ -188,6 +190,11 @@
+                                 - d.joint_damping[i] * d.joint_vel[i]);
+                         for (std::size_t i = 339; i < 368 && i < ob.size(); ++i) std::fprintf(diag_fs_, ",%.5f", ob[i]);
+                         for (std::size_t i = 0; i < 29 && i < ob.size(); ++i) std::fprintf(diag_fs_, ",%.5f", ob[i]);
++                        // Same robot snapshot and actual policy input as this row.
++                        std::fprintf(diag_fs_, ",%.7f,%.7f,%.7f,%.7f,%.7f,%.7f,%.7f",
++                                     d.root_quat_w.w(), d.root_quat_w.x(),
++                                     d.root_quat_w.y(), d.root_quat_w.z(),
++                                     ob.at(336), ob.at(337), ob.at(338));
+                         std::fprintf(diag_fs_, "\n");
+                         std::fflush(diag_fs_);
+                         if (++diag_rows_ % 25 == 0) ::fsync(::fileno(diag_fs_));
+--- a/assets/flashmimic_fast_17500/deploy_config.yaml
++++ b/assets/flashmimic_fast_17500/deploy_config.yaml
+@@ -1,5 +1,6 @@
+ # FlashMimic mjwarp_fast 60k (run 2026-10-15_17-16-22, latest DR/noise); feedforward embedded in ONNX.
+ obs_dim: 397
++gravity_observation: flashmimic_sensor_reference  # A/B baseline: body
+ action_dim: 29
+ ctrl_dt: 0.02
+ action_scale: 2.0

@@ -1,0 +1,43 @@
+{
+  "timestamp_local": "2026-10-19T22:14:17.490020",
+  "host": "192.168.110.51",
+  "root": "/home/unitree/ws/mimiclite_dr/deploy_ws",
+  "backup_dir": "/home/unitree/ws/mimiclite_dr/deploy_ws/backups/gravity_trial_60k_20261019_221417",
+  "before_sha256": {
+    "unitree_rl_lab/deploy/robots/g1_29dof/src/WBT_Policy.cpp": "13dd69f82dd429da1a1d3e12ec9b830c6f2c66e900a9d21e3a9e96fac2129b1e",
+    "unitree_rl_lab/deploy/robots/g1_29dof/src/State_WBT.cpp": "93318b149fdb5293fa93c33e8c9cc0a90cbc7d7c0eb5566ca99b99f38e08ab70",
+    "assets/flashmimic_fast_17500/deploy_config.yaml": "185fda24454ae36689132941e365c1e36b589da2204ccf6ba92e93a98ce28923",
+    "unitree_rl_lab/deploy/robots/g1_29dof/build/g1_ctrl": "9af03b0155334b41834e73a64fa868a06b0f89f04c5aa5e502328217f037aa22",
+    "unitree_rl_lab/deploy/robots/g1_29dof/config/config.yaml": "6bab09f4f375cc277eff213c2013a2eb2e3ddbd7f8eb9c22294b0bb4b365341e"
+  },
+  "after_sha256": {
+    "unitree_rl_lab/deploy/robots/g1_29dof/src/WBT_Policy.cpp": "a05694be435fd7acd0bef8a58137caa96f7dab53403df4a139a3dbaf2f31233d",
+    "unitree_rl_lab/deploy/robots/g1_29dof/src/State_WBT.cpp": "12db48d0c1fbe393fab2d133cbc7326eda8237f0842ba479232375c49bb26131",
+    "assets/flashmimic_fast_17500/deploy_config.yaml": "c3786bbc9c1ccb6354d904acddb4b56c94c291966d4729e4bb43349a2d52e3b3"
+  },
+  "weights_sha256": {
+    "assets/flashmimic_fast_17500/policy.onnx": "9b3b0a222d0fad3062da1003c6418a6d1480704e38e09fb303dec320721a9429",
+    "assets/flashmimic_fast_17500/policy.onnx.data": "6843f565b0532883383038eb5cfece8fbf5a0d1e6e648af43f824f04e4f66041"
+  },
+  "controller_started": false,
+  "motor_commands_sent": false,
+  "build_status": "passed",
+  "source_install_status": "verified",
+  "build_command": "cmake --build /home/unitree/ws/mimiclite_dr/deploy_ws/unitree_rl_lab/deploy/robots/g1_29dof/build --target g1_ctrl -j2",
+  "build_exit_code": 0,
+  "build_finished_at": "2026-10-19T22:15:36.359225",
+  "verification_status": "passed",
+  "verified_at": "2026-10-19T22:16:47.693258",
+  "binary_sha256": "8acb7ff08ce723671d6379cbc47430596c26b6566f2c68f7e1714d93ff165f45",
+  "binary_size": 6266736,
+  "binary_elf_machine": "AArch64",
+  "binary_markers_verified": [
+    "flashmimic_sensor_reference",
+    "wbt_training_gravity",
+    "WBTPolicy: [GRAVITY] gravity_observation={}",
+    "imu_qw,imu_qx,imu_qy,imu_qz,ogx,ogy,ogz"
+  ],
+  "fsm_config_unchanged": true,
+  "running_g1_ctrl_pids": [],
+  "latest_diagnostic_csv": "wbt_diag_20261019_213454.csv"
+}

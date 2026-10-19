@@ -1,0 +1,12 @@
+设备部署已完成，尚未启动控制程序。
+
+安装根目录：/home/unitree/ws/mimiclite_dr/deploy_ws
+备份目录：/home/unitree/ws/mimiclite_dr/deploy_ws/backups/gravity_trial_60k_20261019_221417
+构建：成功（cmake --build ... --target g1_ctrl -j2，退出码0）
+静态验证：3文件哈希一致；60k权重哈希不变；新二进制为AArch64且含适配及CSV诊断标记；FSM配置不变；未发现g1_ctrl进程。
+新二进制SHA256：8acb7ff08ce723671d6379cbc47430596c26b6566f2c68f7e1714d93ff165f45
+
+实际运行验证仍由用户人工进行。启动沿用原网卡与--log，模式从assets/flashmimic_fast_17500/deploy_config.yaml读取。预期模式日志：
+WBTPolicy: [GRAVITY] gravity_observation=flashmimic_sensor_reference
+
+原源码、配置和二进制保存在备份目录中，另有rollback.patch、build.log及install_manifest.json。

@@ -1,0 +1,126 @@
+FSM:
+  _: # enabled fsms
+    Passive:
+      id: 1
+    FixStand:
+      id: 2
+    Velocity:
+      id: 3
+      type: RLBase
+
+    Mimic_Dance_102: # uncomment to enable
+      id: 101
+      type: Mimic
+    Mimic_Gangnam_Style:
+      id: 102
+      type: Mimic
+
+    # deploy_ws: parallel WBT chain — independent runtime from Mimic_*.
+    Mimic_WBT_Dance1:
+      id: 110
+      type: WBT
+
+  Passive:
+    transitions: 
+      FixStand: LT + up.on_pressed
+    mode: [
+      1,1,1,1,1,1,
+      1,1,1,1,1,1,
+      1,1,1,
+      1,1,1,1,1,1,1,
+      1,1,1,1,1,1,1,
+    ]
+    kd: [
+      3,3,3,3,3,3,
+      3,3,3,3,3,3,
+      3,3,3,
+      3,3,3,3,3,3,3,  
+      3,3,3,3,3,3,3,  
+    ]
+  FixStand:
+    transitions: 
+      Passive: LT + B.on_pressed
+      Velocity: RB + X.on_pressed
+    kp: [
+      100., 100., 100., 150., 40., 40.,
+      100., 100., 100., 150., 40., 40.,
+      200,200,200,
+      40,40,40,40,40,40,40,
+      40,40,40,40,40,40,40,
+    ]
+    kd: [
+      2,2,2,4,2,2,
+      2,2,2,4,2,2,
+      5,5,5,
+      10,10,10,10,10,10,10,
+      10,10,10,10,10,10,10,
+    ]
+    ts: [0, 3]
+    qs: [
+      [],
+      [ -0.1, 0,0,0.3,-0.2,0,
+        -0.1, 0,0,0.3,-0.2,0,
+        0,0,0,
+        0, 0.25,0,0.97,0.15, 0,0,
+        0, -0.25,0,0.97,-0.15, 0,0
+      ]
+    ]
+  Velocity:
+    transitions:
+      Passive: LT + B.on_pressed
+      Mimic_Dance_102: LT(2s) + down.on_pressed
+      Mimic_Gangnam_Style: LT(2s) + left.on_pressed
+      Mimic_WBT_Dance1: LT(2s) + right.on_pressed
+
+    policy_dir: config/policy/velocity
+    # policy_dir: ../../../logs/rsl_rl/unitree_g1_29dof_velocity
+  Mimic_Dance_102:
+    transitions: 
+      Passive: LT + B.on_pressed
+      Velocity: RB + X.on_pressed
+    fps: 60
+    motion_file: config/policy/mimic/dance_102/params/G1_Take_102.bvh_60hz.csv
+    policy_dir: config/policy/mimic/dance_102/
+    time_start: 2.8
+    time_end: 24.0
+  Mimic_Gangnam_Style:
+    transitions:
+      Passive: LT + B.on_pressed
+      Velocity: RB + X.on_pressed
+    fps: 60
+    motion_file: config/policy/mimic/gangnam_style/params/G1_gangnam_style_V01.bvh_60hz.csv
+    policy_dir: config/policy/mimic/gangnam_style/
+    time_start: 5.2
+    time_end: 25.5
+
+  # deploy_ws: parallel WBT chain.  Source of truth = deploy_ws/assets/* (paths
+  # resolve from this controller's project root: g1_29dof/).  Current policy:
+  # UniLab G1MotionTrackingSAC MimicLite-obs DR 140k (397-d obs -> 29-d action).
+  Mimic_WBT_Dance1:
+    transitions:
+      Passive: LT + B.on_pressed
+      Velocity: RB + X.on_pressed
+    deploy_config: ../../../../assets/flashmimic_fast_17500/deploy_config.yaml
+    # policy.onnx keeps its weights in policy.onnx.data — both must sit in the same dir.
+    policy:        ../../../../assets/flashmimic_fast_17500/policy.onnx
+    # generated from dance1_subject2_part.npz by scripts/export_motion_bin.py (all 31 bodies)
+    motion:        ../../../../assets/flashmimic_fast_17500/dance1_subject2_part.bin
+    # Nominal PD gains (SDK motor order) = position-actuator kp / kv of the
+    # training MJCF (UniLab src/unilab/assets/robots/g1/g1.xml).  The training
+    # DR randomizes these gains, while deployment uses the nominal contract.
+    kp: [
+      40.179, 99.098, 40.179, 99.098, 28.501, 28.501,
+      40.179, 99.098, 40.179, 99.098, 28.501, 28.501,
+      40.179, 28.501, 28.501,
+      14.251, 14.251, 14.251, 14.251, 14.251, 16.778, 16.778,
+      14.251, 14.251, 14.251, 14.251, 14.251, 16.778, 16.778,
+    ]
+    kd: [
+      2.558, 6.309, 2.558, 6.309, 1.814, 1.814,
+      2.558, 6.309, 2.558, 6.309, 1.814, 1.814,
+      2.558, 1.814, 1.814,
+      0.907, 0.907, 0.907, 0.907, 0.907, 1.068, 1.068,
+      0.907, 0.907, 0.907, 0.907, 0.907, 1.068, 1.068,
+    ]
+    time_start: 0.0   # clip time [s]; rounded to a motion frame (50 fps)
+    # time_end: null  # clip time [s]; null/omitted = play through the last frame

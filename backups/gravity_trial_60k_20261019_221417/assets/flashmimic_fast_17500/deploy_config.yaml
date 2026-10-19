@@ -1,0 +1,129 @@
+# FlashMimic mjwarp_fast 60k (run 2026-10-15_17-16-22, latest DR/noise); feedforward embedded in ONNX.
+obs_dim: 397
+action_dim: 29
+ctrl_dt: 0.02
+action_scale: 2.0
+handoff_duration_s: 0.0  # historical hard cut; last_action and latency slot reset to zero
+simulate_action_latency: true
+anchor_body_name: pelvis
+root_body_idx_in_motion: 1
+anchor_body_idx_in_motion: 1
+future_steps:
+- -8
+- -4
+- -2
+- 0
+- 1
+- 2
+- 3
+- 4
+obs_layout:
+- name: last_action
+  dim: 29
+- name: ref_root_pos_future_local
+  dim: 24
+- name: ref_root_ori_future_b
+  dim: 48
+- name: ref_joint_pos_future
+  dim: 232
+- name: base_ang_vel
+  dim: 3
+- name: projected_gravity
+  dim: 3
+- name: joint_pos
+  dim: 29
+- name: joint_vel
+  dim: 29
+default_angles:
+- -0.312
+- 0.0
+- 0.0
+- 0.669
+- -0.363
+- 0.0
+- -0.312
+- 0.0
+- 0.0
+- 0.669
+- -0.363
+- 0.0
+- 0.0
+- 0.0
+- 0.0
+- 0.2
+- 0.2
+- 0.0
+- 0.6
+- 0.0
+- 0.0
+- 0.0
+- 0.2
+- -0.2
+- 0.0
+- 0.6
+- 0.0
+- 0.0
+- 0.0
+joint_lower:
+- -2.5307
+- -0.5236
+- -2.7576
+- -0.087267
+- -0.87267
+- -0.2618
+- -2.5307
+- -2.9671
+- -2.7576
+- -0.087267
+- -0.87267
+- -0.2618
+- -2.618
+- -0.52
+- -0.52
+- -3.0892
+- -1.5882
+- -2.618
+- -1.0472
+- -1.97222
+- -1.61443
+- -1.61443
+- -3.0892
+- -2.2515
+- -2.618
+- -1.0472
+- -1.97222
+- -1.61443
+- -1.61443
+joint_upper:
+- 2.8798
+- 2.9671
+- 2.7576
+- 2.8798
+- 0.5236
+- 0.2618
+- 2.8798
+- 0.5236
+- 2.7576
+- 2.8798
+- 0.5236
+- 0.2618
+- 2.618
+- 0.52
+- 0.52
+- 2.6704
+- 2.2515
+- 2.618
+- 2.0944
+- 1.97222
+- 1.61443
+- 1.61443
+- 2.6704
+- 1.5882
+- 2.618
+- 2.0944
+- 1.97222
+- 1.61443
+- 1.61443
+source_checkpoint_sha256: 03a8247b438327b6997e79eecb9fc48e95f7b5172805aae2743bd5d0a3b41e27  # 2026-10-15_17-16-22 model_60000 (60k, latest DR)
+reference_action_prior_embedded_in_onnx: true
+physical_robot_tested: false

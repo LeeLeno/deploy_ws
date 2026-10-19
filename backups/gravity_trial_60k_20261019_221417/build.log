@@ -1,0 +1,7 @@
+Scanning dependencies of target g1_29dof_controller_lib
+[ 28%] Building CXX object CMakeFiles/g1_29dof_controller_lib.dir/src/WBT_Policy.cpp.o
+[ 28%] Building CXX object CMakeFiles/g1_29dof_controller_lib.dir/src/State_WBT.cpp.o
+[ 42%] Linking CXX static library libg1_29dof_controller_lib.a
+[ 71%] Built target g1_29dof_controller_lib
+[ 85%] Linking CXX executable g1_ctrl
+[100%] Built target g1_ctrl
