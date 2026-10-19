@@ -298,3 +298,7 @@ cmake .. -DCMAKE_BUILD_TYPE=Release && make -j$(nproc)
   6. 手动退出：RB + X
   7. 紧急停止：任意状态按 LT + B，回到 Passive
   8. 结束后确认处于 Passive，终端按 Ctrl+C
+
+
+  cd /home/unitree/ws/mimiclite_dr/deploy_ws/unitree_rl_lab/deploy/robots/g1_29dof/build
+  ./g1_ctrl --network eth0 --log

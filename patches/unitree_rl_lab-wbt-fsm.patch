@@ -465,10 +465,10 @@ index 0000000..0df7514
 +REGISTER_FSM(State_WBT)
 diff --git a/deploy/robots/g1_29dof/include/WBT_Policy.h b/deploy/robots/g1_29dof/include/WBT_Policy.h
 new file mode 100644
-index 0000000..7ab2c61
+index 0000000..d7bd656
 --- /dev/null
 +++ b/deploy/robots/g1_29dof/include/WBT_Policy.h
-@@ -0,0 +1,142 @@
+@@ -0,0 +1,144 @@
 +// SPDX-FileCopyrightText: 2026 deploy_ws (parallel WBT chain — independent of
 +//   upstream State_Mimic; do not delete in upstream sync).
 +//
@@ -488,6 +488,7 @@ index 0000000..7ab2c61
 +
 +#include "isaaclab/envs/manager_based_rl_env.h"
 +
++#include <algorithm>
 +#include <memory>
 +#include <string>
 +#include <vector>
@@ -575,7 +576,6 @@ index 0000000..7ab2c61
 +    const std::vector<float>& raw_action() const { return raw_action_; }
 +    const std::vector<float>& q_target()   const { return q_target_; }
 +    const Eigen::Quaternionf& init_quat()  const { return init_quat_; }
-+
 +    const WBTMotionLoader&        motion() const { return *motion_; }
 +    isaaclab::ManagerBasedRLEnv*  env()          { return env_.get(); }
 +
@@ -605,6 +605,8 @@ index 0000000..7ab2c61
 +    int  frame_      = 0;
 +    bool begun_      = false;
 +    bool has_action_ = false;
++    float action_scale_ = 1.0f;
++    std::vector<float> default_angles_;
 +    Eigen::Quaternionf init_quat_ = Eigen::Quaternionf::Identity();
 +
 +    std::vector<float> obs_;
@@ -829,10 +831,10 @@ index 0000000..b8a57c4
 +}
 diff --git a/deploy/robots/g1_29dof/src/WBT_Policy.cpp b/deploy/robots/g1_29dof/src/WBT_Policy.cpp
 new file mode 100644
-index 0000000..add02c8
+index 0000000..a63b68b
 --- /dev/null
 +++ b/deploy/robots/g1_29dof/src/WBT_Policy.cpp
-@@ -0,0 +1,451 @@
+@@ -0,0 +1,457 @@
 +// SPDX-FileCopyrightText: 2026 deploy_ws (parallel WBT chain).
 +#include "WBT_Policy.h"
 +
@@ -1158,8 +1160,12 @@ index 0000000..add02c8
 +    if (future_steps_.empty()) {
 +        throw std::runtime_error("WBTPolicy: future_steps must be non-empty");
 +    }
-+    const auto default_angles = deploy_cfg["default_angles"].as<std::vector<float>>();
-+    if (static_cast<int>(default_angles.size()) != action_dim_
++    default_angles_ = deploy_cfg["default_angles"].as<std::vector<float>>();
++    action_scale_ = deploy_cfg["action_scale"].as<float>();
++    if (!(action_scale_ > 0.0f) || !std::isfinite(action_scale_)) {
++        throw std::runtime_error("WBTPolicy: action_scale must be finite and positive");
++    }
++    if (static_cast<int>(default_angles_.size()) != action_dim_
 +        || static_cast<int>(kp.size()) != action_dim_
 +        || static_cast<int>(kd.size()) != action_dim_) {
 +        throw std::runtime_error("WBTPolicy: default_angles / kp / kd must have action_dim entries");
@@ -1237,7 +1243,9 @@ index 0000000..add02c8
 +
 +    env_->episode_length = 0;
 +    env_->global_phase   = 0.0f;
-+    env_->action_manager->reset();        // last action := 0
++    // Historical deployment semantics: clear last_action and the one-step
++    // latency slot, then run policy inference on the next control tick.
++    env_->action_manager->reset();
 +    env_->observation_manager->reset();   // every history row := current snapshot
 +    has_action_ = false;
 +    begun_      = true;
@@ -1279,8 +1287,8 @@ index 0000000..add02c8
 +
 +    obs_        = std::move(obs_map.at("obs"));
 +    raw_action_ = action;
-+    q_target_   = env_->action_manager->processed_actions();
++    q_target_ = env_->action_manager->processed_actions();
 +    env_->episode_length += 1;
-+    frame_ += 1;
++    ++frame_;
 +    has_action_ = true;
 +}
